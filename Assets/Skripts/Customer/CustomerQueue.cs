@@ -4,22 +4,23 @@ using UnityEngine;
 namespace BurgerIdle.Customers
 {
     /// <summary>
-    /// 손님 줄. 씬에 배치한 경로 점을 따라 일정 간격의 슬롯을 만들고, 손님은 줄 순서대로 슬롯에 선다.
-    /// 앞 손님이 빠지면 뒤 손님들이 경로를 따라 전진한다. 콜라이더·물리를 쓰지 않는다.
+    /// 줄. 씬에 배치한 경로 점을 따라 일정 간격의 슬롯을 만들고, 줄 선 대상(손님·차량)은 순서대로 슬롯에 선다.
+    /// 앞이 빠지면 뒤 대상들이 경로를 따라 전진한다. 콜라이더·물리를 쓰지 않는다.
+    /// 드라이브스루 차량 줄은 같은 컴포넌트에 차량용 Config를 연결해 쓴다.
     /// </summary>
     public sealed class CustomerQueue : MonoBehaviour
     {
-        [Tooltip("줄 경로. 첫 점 = 맨 앞 손님 위치(카운터 앞), 마지막 점 = 줄 끝(입구 쪽). 꺾인 줄 가능")]
+        [Tooltip("줄 경로. 첫 점 = 맨 앞 위치(카운터 앞), 마지막 점 = 줄 끝(입구 쪽). 꺾인 줄 가능")]
         [SerializeField] Transform[] path;
         [SerializeField] CustomerConfig config;
 
-        readonly List<Customer> customers = new List<Customer>();
+        readonly List<QueueMember> members = new List<QueueMember>();
 
         public CustomerConfig Config => config;
-        public bool IsFull => customers.Count >= config.maxQueueLength;
-        public Customer Front => customers.Count > 0 ? customers[0] : null;
+        public bool IsFull => members.Count >= config.maxQueueLength;
+        public QueueMember Front => members.Count > 0 ? members[0] : null;
 
-        /// <summary>경로 전체 길이. 입장한 손님은 이 지점에서 줄에 합류한다.</summary>
+        /// <summary>경로 전체 길이. 입장한 대상은 이 지점(줄 끝)에서 줄에 합류한다.</summary>
         public float PathLength
         {
             get
@@ -31,14 +32,14 @@ namespace BurgerIdle.Customers
             }
         }
 
-        public void Join(Customer customer) => customers.Add(customer);
+        public void Join(QueueMember member) => members.Add(member);
 
-        public void Leave(Customer customer) => customers.Remove(customer);
+        public void Leave(QueueMember member) => members.Remove(member);
 
-        /// <summary>손님이 서야 할 경로상 거리 (맨 앞 = 0).</summary>
-        public float SlotDistance(Customer customer) => customers.IndexOf(customer) * config.queueSpacing;
+        /// <summary>대상이 서야 할 경로상 거리 (맨 앞 = 0).</summary>
+        public float SlotDistance(QueueMember member) => members.IndexOf(member) * config.queueSpacing;
 
-        public bool IsFront(Customer customer) => customers.Count > 0 && customers[0] == customer;
+        public bool IsFront(QueueMember member) => members.Count > 0 && members[0] == member;
 
         /// <summary>경로 시작점에서 distance만큼 떨어진 위치. 경로보다 길면 마지막 구간 방향으로 연장한다.</summary>
         public Vector3 Evaluate(float distance)

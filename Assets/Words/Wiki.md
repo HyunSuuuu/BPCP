@@ -1,7 +1,7 @@
 # Burger Idle — 개발 위키
 
 > 코드 구조와 작업 규칙을 정리한 문서다. 기획은 [GDD.md](GDD.md), 진행 상황은 [Checklist.md](Checklist.md)를 본다.
-> 기준 시점: P5 완료 (핵심 루프 1바퀴: 생산 → 운반 → 판매 → 돈 더미 → 수거)
+> 기준 시점: P6 작업 중 (P5 핵심 루프 완료 + Area·출입문 구조)
 
 ---
 
@@ -77,6 +77,7 @@ Assets/
     Station/    BurgerIdle.Station    기계, 카운터, 쓰레기통
     Money/      BurgerIdle.Money      돈 오브젝트, 돈 더미, 수거
     Customer/   BurgerIdle.Customers  손님, 줄, 스포너  ← 폴더명과 네임스페이스가 다름 (클래스 Customer와 충돌 방지)
+    Area/       BurgerIdle.Areas      매장 영역, 출입문  ← 같은 이유로 네임스페이스가 복수형
     Unlock/     BurgerIdle.Unlock     해금 박스, 해금 구역, 해금 데이터
     Economy/    BurgerIdle.Economy    재화
     UI/         BurgerIdle.UI         HUD, 조이스틱
@@ -140,14 +141,14 @@ flowchart LR
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Entering: 입구에서 생성
-    Entering --> Queueing: 줄 끝(경로 마지막 점) 도착
+    [*] --> Entering: Area 입구 바깥 점에서 생성
+    Entering --> Queueing: 입구 안쪽 점 → 줄 끝(경로 마지막 점) 도착
     Queueing --> AtCounter: 맨 앞 자리 도착
-    AtCounter --> Leaving: 버거 수령 (Counter.Sell)
-    Leaving --> [*]: 출구 도착 → 풀 반납
+    AtCounter --> Leaving: 버거 수령 (Counter.Sell → QueueMember.Serve)
+    Leaving --> [*]: 출구 안쪽 점 → 바깥 점 도착 → 풀 반납
 ```
 
-Area 출입문(P6), 테이블 식사(P7), 진상 손님(P13)은 아직 없다.
+이 흐름은 `QueueMember`가 처리하고 손님(`Customer`)과 드라이브스루 차량(P11)이 공유한다. 테이블 식사(P7)는 `Customer`가 `OnServed`를 재정의해 추가한다. 진상 손님(P13)은 아직 없다.
 
 ### 5.3 자동 상호작용 규칙
 
@@ -217,10 +218,19 @@ Area 출입문(P6), 테이블 식사(P7), 진상 손님(P13)은 아직 없다.
 
 | 스크립트 | 역할 | 비고 |
 | --- | --- | --- |
-| `Customer` | 손님 (5.2 상태) | 프리팹 루트는 **발 위치(Y 0)**. Food Anchor(비우면 높이 2.1) |
-| `CustomerQueue` | 경로 점을 따라 1.0 간격 슬롯 자동 계산. 앞이 비면 경로 따라 전진 | Path: P0 = 카운터 앞(맨 앞), 마지막 = 줄 끝(입구 쪽). 꺾인 줄 가능. 노란 선·원으로 표시 |
-| `CustomerSpawner` | 입장 간격마다 손님 생성. 줄이 차면 멈춤 | Prefab, Queue, Entrance, Exit, **Open Zone**(이 구역 완료 후 시작, 비우면 즉시) |
-| `CustomerConfig` | 손님 수치 | 2.4 참조 |
+| `QueueMember` | 줄 서는 대상의 공통 동작 (추상 클래스, 5.2 상태). 입구 → 줄 → 수령 → 출구 | `Begin(queue, 입구 안쪽 점, 출구 경로)`, `Serve(food)`, `State`. 수령 후 행동은 `OnServed` 재정의. Item Anchor(비우면 높이 2.1) |
+| `Customer` | 매장 손님 (`QueueMember` 상속) | 프리팹 루트는 **발 위치(Y 0)**. P7에서 테이블 이동 추가 |
+| `CustomerQueue` | 경로 점을 따라 슬롯 자동 계산. 앞이 비면 경로 따라 전진. 차량 줄에도 재사용 | Path: P0 = 카운터 앞(맨 앞), 마지막 = 줄 끝(입구 쪽). 꺾인 줄 가능. 노란 선·원으로 표시 |
+| `CustomerSpawner` | Area 입구에서 입장 간격마다 생성. 줄이 차면 멈춤 | Prefab(`QueueMember`), Queue, **Area**, Entrance Type·Exit Type(기본 사람 입구·출구, 차량은 차량 입구·출구), **Open Zone**(이 구역 완료 후 시작, 비우면 즉시) |
+| `CustomerConfig` | 손님(또는 차량) 수치 | 2.4 참조. 차량은 별도 에셋 |
+
+### 6.6.1 Areas · 공용 이동
+
+| 스크립트 | 역할 | 비고 |
+| --- | --- | --- |
+| `Area` | 매장 전체 영역. 출입문 목록 관리 | Gates 비우면 자식 `AreaGate` 자동 수집. `TryGetGate(type)` — 같은 종류가 여러 개면 무작위 |
+| `AreaGate` | 출입문. 바깥 점 → 안쪽 점 | Usage 체크(사람 입구·출구, 차량 입구·출구, 겸용 가능), Outside·Inside 연결. 씬 뷰에 화살표(사람 초록, 차량 하늘색) |
+| `RouteWalker` | 여러 점을 차례로 직선 이동 (일반 C# 클래스, Core) | 손님·차량·배달원의 출입문 경유 이동. `Start(points)`, `Step(transform, speed, turn)` |
 
 ### 6.7 Unlock
 
@@ -263,6 +273,9 @@ Area 출입문(P6), 테이블 식사(P7), 진상 손님(P13)은 아직 없다.
 | 해금 구역 | `UnlockZone` + 자식 해금 박스들 | — |
 | 손님 줄 | `CustomerQueue` + 자식 경로 점 | Config 연결 |
 | 손님 프리팹 | 루트(발 위치) `Customer` + 자식 모양 | — |
+| 매장 영역 | `Area` + 자식 출입문들 | — |
+| 출입문 | `AreaGate` + 자식 빈 오브젝트 Outside(매장 밖), Inside(문 안쪽) | Usage 체크. 사람 문 하나를 입구·출구 겸용 가능 |
+| 손님 스포너 | `CustomerSpawner` | Area 연결, Entrance Type = People Entrance, Exit Type = People Exit |
 | 음식·쓰레기 프리팹 | 루트 `PickupObject` | Kind, Stack Height |
 | 돈 프리팹 | 루트 `MoneyObject` | 크기 비율 1 × 2 × 0.2 (예: 0.25 × 0.05 × 0.5) |
 
@@ -318,6 +331,7 @@ ObjectPools.Release(component);     // 그 외 컴포넌트
 | 물건이 받침대에 파묻힘 | `PickupPile` Origin 높이 | Origin Y를 받침대 윗면 높이로 |
 | 해금 후 대상이 안 나타남 | Target이 박스의 자식 | Target을 박스 밖으로 이동 |
 | 손님이 안 나옴 | Open Zone 미완료 또는 미연결 | `[UnlockZone] ... 해금 완료` 로그 확인 |
+| `[CustomerSpawner] ... 출입문이 없습니다` | Area에 해당 종류 문이 없거나 Outside·Inside 미연결 | `AreaGate`의 Usage 체크와 두 점 연결 확인 |
 | `[UnlockZone] ...: 해금 박스가 없습니다.` | 엉뚱한 오브젝트에 `UnlockZone`이 붙음 | 해당 컴포넌트 제거 |
 | TMP 글자가 □로 표시 | 기본 폰트(LiberationSans)에 한글 없음 | 한글 TMP 폰트 에셋을 Fallback에 추가 |
 | `MissingReferenceException: ... GameObjectInspector` | Unity 에디터 내부 오류 (Play 종료 시 인스펙터 대상 소멸) | 무시해도 됨 |

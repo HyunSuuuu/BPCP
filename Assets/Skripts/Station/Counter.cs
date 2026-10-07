@@ -24,7 +24,7 @@ namespace BurgerIdle.Station
         CurrencyManager currency;
         Transform player;
         GameConfig config;
-        Customer currentCustomer;
+        QueueMember currentCustomer;
         float progress;
 
         public void Init(CurrencyManager currency, Transform player, GameConfig config)
@@ -46,7 +46,7 @@ namespace BurgerIdle.Station
                 return;
 
             var customer = queue.Front;
-            if (customer == null || customer.State.CurrentValue != CustomerState.AtCounter)
+            if (customer == null || customer.State.CurrentValue != QueueMemberState.AtCounter)
                 return;
 
             // 손님이 바뀌면 진행도 초기화, 판매자가 자리를 비우면 진행도 유지한 채 멈춤
@@ -67,7 +67,7 @@ namespace BurgerIdle.Station
             Sell(customer);
         }
 
-        void Sell(Customer customer)
+        void Sell(QueueMember customer)
         {
             if (!stock.TryTakeTop(out var food))
                 return;
