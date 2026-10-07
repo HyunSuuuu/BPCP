@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77662af74be8dca47a615ffca2d6027a, type: 3}
+  m_Name: GameConfig
+  m_EditorClassIdentifier: Assembly-CSharp::BurgerIdle.Core.GameConfig
+  startMoney: 100
+  playerMoveSpeed: 5
+  playerMaxCarry: 4
+  playerTurnSpeed: 720
+  pickupInterval: 0.1
+  unlockStillTime: 0.5
+  unlockPayDuration: 1.5
+  moneyPrefab: {fileID: -3307413741003403289, guid: ccab83b8de3673b49a63016073dd64a4, type: 3}
+  cameraPitch: 50
+  cameraYaw: 45
+  cameraDistance: 22
+  cameraFieldOfView: 40
+  cameraFollowSharpness: 8
+  joystickRadius: 140
+  joystickRestHeight: 380
