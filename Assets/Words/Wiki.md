@@ -188,7 +188,6 @@ stateDiagram-v2
 | `ObjectPools` | 프리팹별 오브젝트 풀 (static) | — | `Get(prefab, pos, rot)` / `Release(instance)` |
 | `PooledObject` | 인스턴스가 자기 풀을 기억하는 핸들 | 풀이 자동 부착 | 직접 붙이지 않음 |
 | `DebugCheats` | 테스트 키 | Bootstrap이 자동 부착 (에디터·개발 빌드만) | 9장 참조 |
-| `DebugPickupFeeder` | 테스트용 물건 공급기 | 테스트 오브젝트 | P7 이후 제거 예정. 현재 쓰레기 공급용 |
 
 ### 6.2 Player
 
@@ -426,7 +425,7 @@ ObjectPools.Release(component);     // 그 외 컴포넌트
 | --- | --- | --- |
 | 화면이 멈춘 것처럼 보이고 플레이어가 안 움직임 | 투명한 UI(Panel 등)의 Raycast Target이 켜져 조이스틱 입력을 가로챔 | 버튼이 아닌 UI 요소는 Raycast Target 끄기. World Space Canvas의 Graphic Raycaster 제거 |
 | 실행 시 UI만 뜨고 아무것도 없음 | Bootstrap에 프리팹 에셋(Project 창)을 연결함 | Hierarchy의 씬 오브젝트 연결. Console의 `[GameBootstrap]` 오류 확인 |
-| 공급기·기계에서 물건이 안 나옴 | `PickupPile` Category와 프리팹 Kind 불일치 | Console의 `[Machine]`·`[DebugPickupFeeder]` 경고 확인 후 Category 수정 |
+| 공급기·기계에서 물건이 안 나옴 | `PickupPile` Category와 프리팹 Kind 불일치 | Console의 `[Machine]` 경고 확인 후 Category 수정 |
 | 물건이 받침대에 파묻힘 | `PickupPile` Origin 높이 | Origin Y를 받침대 윗면 높이로 |
 | 해금 후 대상이 안 나타남 | Target이 박스의 자식 | Target을 박스 밖으로 이동 |
 | 손님이 안 나옴 | Open Zone 미완료 또는 미연결 | `[UnlockZone] ... 해금 완료` 로그 확인 |

@@ -18,7 +18,7 @@ MonoBehaviour:
   category: 0
   stat: 2
   requiredPlayerLevel: 0
-  maxLevel: 18
+  maxLevel: 5
   baseCost: 100
   costGrowth: 1.35
   valuePerLevel: 0.5

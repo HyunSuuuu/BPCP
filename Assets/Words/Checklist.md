@@ -15,10 +15,12 @@
 | P8 | 레벨업 · 업그레이드 · HUD 분리 | 8장, 11장 | ✅ 완료 |
 | P9 | 알바 AI | 9장 | ✅ 완료 |
 | P10 | ZoneManager · ZoneStart → Zone 0(매장) → Zone 1(업그레이드 패드) | 10장 | ✅ 완료 |
-| **P11** | **Zone 2 · 드라이브스루 · 포장 · ZoneEnd 알림** | 6.3, 6.13 | ▶ **작업 중** |
-| P12 | Zone 3 · 배달 (재추가, ZoneEnd 앞) | 6.14 | 대기 (코드 작성됨, P11 테스트 후) |
-| P13 | 진상 손님 · 엔딩 | 6.8, 10장 | 대기 (❓ 종료 조건) |
+| P11 | Zone 2 · 드라이브스루 · 포장 · ZoneEnd 알림 | 6.3, 6.13 | ✅ 완료 |
+| P12 | Zone 3 · 배달 (재추가, ZoneEnd 앞) | 6.14 | ✅ 완료 |
+| P13 | 진상 손님 · 마무리 연출 | 6.8 | 대기 (엔딩은 P11 ZoneEnd 알림으로 완료) |
 | P14 | 저장 · 오프라인 보상 | 3장 | 대기 |
+
+> **현재 상태 (2026-10-13):** P0~P12 완료, 시작부터 엔딩(ZoneEnd)까지 플레이 가능. 다음: 빌드 → (선택) P13 진상 손님·연출, P14 저장
 
 ---
 
@@ -28,8 +30,8 @@
 - [x] Input System 1.20 설치, Active Input Handling = Input System
 - [x] R3 1.3.1 설치 (`using R3;`)
 - [x] DOTween Pro 설치 및 Setup 완료 (`using DG.Tweening;`, Pro 기능 사용 가능)
-- [ ] Player Settings 화면 방향을 Portrait로 변경 (현재 Auto Rotation), Game 뷰 세로 해상도
-- [ ] MainScene에 빈 오브젝트 + `GameBootstrap` 부착 (사용자, P1 스크립트 작성 후)
+- [x] Player Settings 화면 방향을 Portrait로 변경, Game 뷰 세로 해상도
+- [x] MainScene에 빈 오브젝트 + `GameBootstrap` 부착 (사용자, P1 스크립트 작성 후)
 - [x] `Assets/Skripts`(하위 폴더), `Assets/Data` 구성, 네임스페이스 `BurgerIdle.*`, 빈 `GameManager.cs` 삭제
 - **완료 기준:** 컴파일 오류 없음
 
@@ -79,7 +81,7 @@
   - [x] Fill: Filled Image의 fillAmount = 투입 비율 (화면 아래→위), 돈이 도착할 때 박스가 살짝 튐
   - [x] 코인(돈 프리팹) 날아가는 DOTween 연출, 풀링
   - [x] 완료 시 박스 축소·제거 → 씬에 미리 배치한 대상 오브젝트가 Scale 트윈으로 등장
-  - [ ] "Lv N 필요" 표시·레벨 검사 → P7로 이동
+  - [x] "Lv N 필요" 표시·레벨 검사 → P8에서 구현 (P10에서 숫자만 표시로 변경)
 - [x] `MoneyObject` 최소 구현 (금액, 풀 반납) + (사용자) 돈 프리팹 → `GameConfig`에 연결
 - [x] (사용자) 카운터·버거 기계·테이블 해금 박스 배치, 각 30
 - [x] 쓰레기통 시작부터 설치 (해금 없음)
@@ -146,7 +148,7 @@ GDD 6.12 기준. 드라이브스루 차량(P11)과 배달원(P12)이 같은 구�
 - [x] 쓰레기 픽업(음식 소지 시 불가) → 쓰레기통에서 0.1초/개 버리기, 보상 없음
 - [x] 초기화: 예약·착석 0명 && TrashCount 0 → SeatedSinceClean = 0
 - [x] 팁 수거는 테이블 상태와 독립
-- [ ] 테스트용 쓰레기 공급기(`DebugPickupFeeder`) 제거 (씬에서 TrashFactory 삭제 후 스크립트 삭제)
+- [x] 테스트용 쓰레기 공급기(`DebugPickupFeeder`) 제거 (2026-10-13 스크립트 삭제)
 - **완료 기준:** 좌석이 없으면 판매 안 됨 / 주문 수량만큼 판매·말풍선 표시 / 공유 식사 후 함께 퇴장 / 청소해야 테이블이 다시 열림 / 번갈아 입장해도 강제 청소 발동 (GDD 6.9 예시 1·2 검증) / VIP 등장 ✅
 
 ## P8. 레벨업 · 업그레이드
@@ -205,36 +207,40 @@ GDD 6.12 기준. 드라이브스루 차량(P11)과 배달원(P12)이 같은 구�
 - **완료 기준:** 매장 밖에서 시작 → Zone 0 구매 → 시설 3종 해금 시 손님 입장 → Zone 1 확장 → 업그레이드 패드 해금 → Zone 2 확장 박스 등장
 ## P11. Zone 2 · 드라이브스루 · 포장
 
+> P11 테스트 완료 (2026-10-13): 드라이브스루·포장·알바 처리·ZoneEnd 알림까지 플레이 확인. 추가 수정: 포장 테이블 Input Capacity 0 = 무제한, 알바·플레이어 NavMeshAgent 회피 끔
+
 결정 (2026-10-13): Zone 2에 도로 추가, 차량 출구 따로, 경로 점 사용자 배치, 확장·시설 가격은 사용자가 조정, 포장 버거 = 버거 판매가 × 4 × 1.5 (포장 추가금), 알바 판매 간격 → 행동 속도(판매·포장 속도 배율), 알바 최대 6명, 종료 = ZoneEnd 해금 시 알림
 
-- [ ] 받는 곳별 받는 종류(Kind) 필터: 일반 카운터(버거, `Counter.Sell Kind`), 포장 테이블(버거), 드라이브스루(포장 버거) — `PickupPile.SetAcceptedKinds`
-- [ ] 스택 내려놓기: 받을 수 있는 것 중 가장 위에 있는 것부터 (플레이어·알바 공통)
-- [ ] `PickupKind.PackedBurger`, `GameConfig` Packing·Drive-thru 항목 (버거 수 4, 배율 1.5, 플레이어 0.5초, 알바 2초, 포장 버거 프리팹), `PriceOf`/`ExpOf`
-- [ ] `PackingTable`: 투입 칸(8), 포장 위치, 출력 칸(4), 버거 4개 → 포장 1개, 자리 비우면 진행도 유지, 월드 게이지(선택)
-- [ ] 드라이브스루 카운터 = `Counter` 재사용 (Sell Kind = Packed Burger, 차량 줄)
-- [ ] `Vehicle`(QueueMember): 포장 버거 1개 받으면 바로 차량 출구로 퇴장. `CustomerSpawner`·`CustomerQueue` 재사용
-- [ ] 알바 행동 속도 (`StatKey.WorkerActionSpeed`, 기본 1배 ~ 최대 5배): 판매 간격 = 1초 ÷ 속도, 포장 간격 = 2초 ÷ 속도
-- [ ] 알바 Task: 포장(Pack), 운반을 "모자란 곳(ISupplyTarget) → 그 종류를 내주는 가까운 곳" 방식으로 변경 (카운터·드라이브스루·포장 테이블)
-- [ ] 알바 우선순위: 들고 있는 것 > 급한 청소 > 판매(일반·드라이브스루) > 포장 > 운반(많이 모자란 곳 우선) > 일반 청소
-- [ ] 알바·플레이어 NavMeshAgent 회피 끔 (서로 밀어 작업 위치에서 벗어나 멈추던 문제), 작업 중 위치를 벗어나면 다시 이동
-- [ ] `UnlockDefinition.unlockMessage`: 해금 시 알림 팝업 (ZoneEnd 데모 완료 알림에 사용)
-- [ ] (사용자) 포장 버거 프리팹, 차량 프리팹, 차량용 CustomerConfig, PackingTableSet·DriveThruSet 프리팹
-- [ ] (사용자) Zone 2 바닥·도로·벽, 차량 입구·출구(AreaGate), 차량 줄 경로 점, 차량 스포너
-- [ ] (사용자) ZoneEnd (Zone + Expansion, Definition의 Unlock Message 입력), 알바 업그레이드 에셋 이름 정리(행동 속도)
+- [x] 받는 곳별 받는 종류(Kind) 필터: 일반 카운터(버거, `Counter.Sell Kind`), 포장 테이블(버거), 드라이브스루(포장 버거) — `PickupPile.SetAcceptedKinds`
+- [x] 스택 내려놓기: 받을 수 있는 것 중 가장 위에 있는 것부터 (플레이어·알바 공통)
+- [x] `PickupKind.PackedBurger`, `GameConfig` Packing·Drive-thru 항목 (버거 수 4, 배율 1.5, 플레이어 0.5초, 알바 2초, 포장 버거 프리팹), `PriceOf`/`ExpOf`
+- [x] `PackingTable`: 투입 칸(8), 포장 위치, 출력 칸(4), 버거 4개 → 포장 1개, 자리 비우면 진행도 유지, 월드 게이지(선택)
+- [x] 드라이브스루 카운터 = `Counter` 재사용 (Sell Kind = Packed Burger, 차량 줄)
+- [x] `Vehicle`(QueueMember): 포장 버거 1개 받으면 바로 차량 출구로 퇴장. `CustomerSpawner`·`CustomerQueue` 재사용
+- [x] 알바 행동 속도 (`StatKey.WorkerActionSpeed`, 기본 1배 ~ 최대 5배): 판매 간격 = 1초 ÷ 속도, 포장 간격 = 2초 ÷ 속도
+- [x] 알바 Task: 포장(Pack), 운반을 "모자란 곳(ISupplyTarget) → 그 종류를 내주는 가까운 곳" 방식으로 변경 (카운터·드라이브스루·포장 테이블)
+- [x] 알바 우선순위: 들고 있는 것 > 급한 청소 > 판매(일반·드라이브스루) > 포장 > 운반(많이 모자란 곳 우선) > 일반 청소
+- [x] 알바·플레이어 NavMeshAgent 회피 끔 (서로 밀어 작업 위치에서 벗어나 멈추던 문제), 작업 중 위치를 벗어나면 다시 이동
+- [x] `UnlockDefinition.unlockMessage`: 해금 시 알림 팝업 (ZoneEnd 데모 완료 알림에 사용)
+- [x] (사용자) 포장 버거 프리팹, 차량 프리팹, 차량용 CustomerConfig, PackingTableSet·DriveThruSet 프리팹
+- [x] (사용자) Zone 2 바닥·도로·벽, 차량 입구·출구(AreaGate), 차량 줄 경로 점, 차량 스포너
+- [x] (사용자) ZoneEnd (Zone + Expansion, Definition의 Unlock Message 입력), 알바 업그레이드 에셋 이름 정리(행동 속도)
 - **완료 기준:** 버거 → 포장 → 드라이브스루 판매 → 돈 더미 수거 1바퀴, 포장 버거가 일반 카운터에 들어가지 않음, 알바가 포장·드라이브스루까지 처리, ZoneEnd 해금 시 알림
 
 ## P12. Zone 3 · 배달 (2026-10-13 재추가)
 
+> P12 테스트 완료 (2026-10-13): 배달 성공·실패·재등장, 알바 제출 확인. 엔딩(ZoneEnd)까지 버그 없이 플레이 완료
+
 결정: Zone 3 = 배달 지점만, 배달원이 와서 기다리는 동안만 배달 지점이 받는 곳(임시 판매대)이 됨, 주문 품목 버거만, 보상 = 일반 판매가 × 2 (경험치도 × 2, 수익 배율 적용, 즉시 입금), 제한 시간 90초, 알바 참여(판매 다음·포장 위, 20초 이하 남으면 급한 청소 다음), 실패 시 제출분 삭제 + "배달 실패" 알림, 지나가며 자동 제출 허용, 도착 시 "SPECIAL ORDER!" 알림
 
-- [ ] `DeliveryConfig` SO: 품목(버거), 수량 5~10, 제한 시간 90초, 보상 배율 2, 첫 등장 5초, 재등장 30초, 이동속도, 급한 시간 20초, 품목 아이콘
-- [ ] `DeliveryPoint`: 배달원이 주문 중일 때만 `IPickupReceiver` + `ISupplyTarget`로 등록 → 플레이어 자동 제출, 알바 운반이 그대로 동작
-- [ ] `DeliveryRider`: 사람 입구 → 배달 지점, 도착 시 주문 시작(제한 시간), 제출분 머리 위에 쌓임, 성공·실패 → 사람 출구 → 풀 반납
-- [ ] `DeliverySpawner`: Open Zone(비우면 속한 Zone의 Facilities) 해금 후 시작, 한 번에 1명, 종료 후 30초 뒤 재등장, 성공 보상 즉시 입금, 알림(도착·성공·실패)
-- [ ] `DeliveryBubble`: SPECIAL ORDER(고정 텍스트), 남은 시간 분:초(급하면 빨강), 품목 아이콘, 제출/필요, 카메라를 향함
-- [ ] 알바: `SupplyPriority`(Normal·Order·Urgent)로 배달 운반 우선순위 (Urgent 3.5 > 판매 3 > Order 2.75 > 포장 2.5 > 재고 운반 2)
-- [ ] (사용자) 배달원 프리팹(+ 말풍선 World Space Canvas), DeliveryConfig 에셋, 배달 지점 세트(해금 박스 + DeliveryPoint), 배달 스포너
-- [ ] (사용자) Zone 3 (ZoneEnd 위 순서), 확장 박스·Definition
+- [x] `DeliveryConfig` SO: 품목(버거), 수량 5~10, 제한 시간 90초, 보상 배율 2, 첫 등장 5초, 재등장 30초, 이동속도, 급한 시간 20초, 품목 아이콘
+- [x] `DeliveryPoint`: 배달원이 주문 중일 때만 `IPickupReceiver` + `ISupplyTarget`로 등록 → 플레이어 자동 제출, 알바 운반이 그대로 동작
+- [x] `DeliveryRider`: 사람 입구 → 배달 지점, 도착 시 주문 시작(제한 시간), 제출분 머리 위에 쌓임, 성공·실패 → 사람 출구 → 풀 반납
+- [x] `DeliverySpawner`: Open Zone(비우면 속한 Zone의 Facilities) 해금 후 시작, 한 번에 1명, 종료 후 30초 뒤 재등장, 성공 보상 즉시 입금, 알림(도착·성공·실패)
+- [x] `DeliveryBubble`: SPECIAL ORDER(고정 텍스트), 남은 시간 분:초(급하면 빨강), 품목 아이콘, 제출/필요, 카메라를 향함
+- [x] 알바: `SupplyPriority`(Normal·Order·Urgent)로 배달 운반 우선순위 (Urgent 3.5 > 판매 3 > Order 2.75 > 포장 2.5 > 재고 운반 2)
+- [x] (사용자) 배달원 프리팹(+ 말풍선 World Space Canvas), DeliveryConfig 에셋, 배달 지점 세트(해금 박스 + DeliveryPoint), 배달 스포너
+- [x] (사용자) Zone 3 (ZoneEnd 위 순서), 확장 박스·Definition
 - **완료 기준:** 제한 시간 안에 제출하면 즉시 입금, 실패 시 보상 없이 제출분 삭제 후 퇴장, 30초 뒤 재등장, 알바도 제출
 
 ## P13. 진상 손님 · 마무리
@@ -260,6 +266,20 @@ GDD 6.12 기준. 드라이브스루 차량(P11)과 배달원(P12)이 같은 구�
 - **완료 기준:** 재시작 시 진행 상황 복원, 오프라인 보상 지급
 
 ---
+
+## 빌드 준비 (2026-10-13)
+
+- [x] Build Settings 씬 목록: MainScene 1개
+- [x] 화면 방향 Portrait, PC 창은 모니터 높이의 85%인 9:16 세로 창(`StandaloneWindow`, Resizable 끔, Windowed)
+- [ ] (사용자) HUD Canvas Scaler: Scale With Screen Size, 1080×1920, Match 0 (현재 Constant Pixel Size라 PC 창에서 UI가 약 2배로 커짐)
+- [x] 디버그 치트(`DebugCheats`)는 에디터·Development Build에서만 동작 (릴리스 빌드 제외)
+- [x] 테스트용 `DebugPickupFeeder` 삭제
+- [x] 씬·프리팹에 빠진 스크립트(Missing Script) 없음 확인
+- [x] Android: IL2CPP, ARM64, Min SDK 25
+- [ ] (사용자) Company Name·Product Name·Package Name 변경 (현재 DefaultCompany / BPCP / 템플릿 기본 패키지명)
+- [ ] (사용자) Version 정하기 (현재 0.1.0), Android Bundle Version Code
+- [ ] (사용자) 아이콘·스플래시 (선택)
+- [ ] (사용자) Development Build 끄고 빌드 → 실행 확인 (Windows exe, Android APK)
 
 ## 공통 규칙 (모든 Phase)
 
