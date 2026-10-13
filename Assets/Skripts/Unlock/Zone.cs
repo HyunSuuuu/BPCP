@@ -74,6 +74,10 @@ namespace BurgerIdle.Unlock
 
             if (expansion != null && expansion.Target != null)
                 Debug.LogWarning($"[Zone] {name}: 확장 박스 {expansion.name}의 Target({expansion.Target.name})을 비워 주세요. Zone 표시는 ZoneManager가 합니다.", expansion);
+
+            // 시설 박스를 확장 박스로 연결하면, 숨겨진 Facilities 안에 있어 확장 박스가 영영 보이지 않는다
+            if (expansion != null && facilities != null && expansion.transform.IsChildOf(facilities.transform))
+                Debug.LogWarning($"[Zone] {name}: 확장 박스 {expansion.name}가 Facilities 안에 있습니다. 확장 박스는 Zone 바로 아래 \"Expansion\"에 따로 두세요.", expansion);
         }
 
         Transform FindChild(string childName)

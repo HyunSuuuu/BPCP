@@ -35,9 +35,9 @@ namespace BurgerIdle.Station
         [SerializeField] InteractionZone packPoint;
 
         [Header("Capacity")]
-        [Tooltip("버거 투입 칸 상한")]
-        [Min(1)] [SerializeField] int inputCapacity = 8;
-        [Tooltip("포장 버거 출력 칸 상한. 가득 차면 포장하지 않는다")]
+        [Tooltip("버거 투입 칸 상한 (0이면 무제한). Input의 PickupPile Capacity 대신 이 값이 쓰인다")]
+        [Min(0)] [SerializeField] int inputCapacity = 8;
+        [Tooltip("포장 버거 출력 칸 상한. 가득 차면 포장하지 않는다. Output의 PickupPile Capacity 대신 이 값이 쓰인다")]
         [Min(1)] [SerializeField] int outputCapacity = 4;
 
         [Header("Gauge (선택)")]
@@ -74,7 +74,8 @@ namespace BurgerIdle.Station
                 if (config == null || output.IsFull)
                     return 0;
                 var needed = config.burgersPerPack * (outputCapacity - output.Count.CurrentValue) - input.Count.CurrentValue;
-                return Mathf.Clamp(needed, 0, inputCapacity - input.Count.CurrentValue);
+                var space = inputCapacity > 0 ? inputCapacity - input.Count.CurrentValue : int.MaxValue;
+                return Mathf.Clamp(needed, 0, space);
             }
         }
         public IPickupReceiver Receiver => receiver ??= SupplyTargets.FindReceiver(this, input);

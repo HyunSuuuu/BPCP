@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BurgerIdle.Delivery;
 using BurgerIdle.Economy;
 using BurgerIdle.Money;
 using BurgerIdle.Pickup;
@@ -166,6 +167,9 @@ namespace BurgerIdle.Core
                 agent.baseOffset = height;
             }
 
+            // 알바와 서로 밀어내지 않는다 (벽·시설은 NavMesh로 계속 막힘)
+            agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
+
             return agent;
         }
 
@@ -211,6 +215,8 @@ namespace BurgerIdle.Core
             var incomeMultiplier = upgrades.Stat(StatKey.PlayerIncomeMultiplier);
             foreach (var pile in FindAll<MoneyPile>())
                 pile.Init(config.moneyPrefab, incomeMultiplier);
+            foreach (var spawner in FindAll<DeliverySpawner>())
+                spawner.Init(currency, config, incomeMultiplier, hud.Notifications);
         }
 
         void SetupUpgradePads(CurrencyManager currency, PlayerLevel playerLevel, UpgradeManager upgrades)

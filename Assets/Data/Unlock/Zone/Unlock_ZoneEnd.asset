@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 05fb28cb21ff7a74883643d8158371f8, type: 3}
   m_Name: Unlock_ZoneEnd
   m_EditorClassIdentifier: Assembly-CSharp::BurgerIdle.Unlock.UnlockDefinition
-  id: 101
+  id: 105
   displayName: ZoneEnd
   cost: 600
-  requiredPlayerLevel: 7
+  requiredPlayerLevel: 0
   grantLevel: 0
   unlockMessage: "\uD50C\uB808\uC774 \uD574\uC8FC\uC154\uC11C \uAC10\uC0AC\uD569\uB2C8\uB2E4."

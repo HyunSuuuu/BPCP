@@ -218,7 +218,7 @@ stateDiagram-v2
 | --- | --- | --- |
 | `Machine` | 일정 간격으로 음식 생산 → 출력 Pile에 쌓음. 재고 상한에서 멈춤 | 같은 오브젝트에 `PickupPile`. Product에 음식 프리팹. `ProducePerSecond`, `MaxStock` (P8 업그레이드 대상) |
 | `Counter` | 판매. 판매가·경험치는 종류별(`GameConfig.PriceOf/ExpOf`: 버거 10·5, 포장 버거 = 버거 × 4 × 1.5), 물건이 손님·차량 머리 위로 전달. 알바 간격 = 1초 ÷ 행동 속도. 드라이브스루 카운터도 이 컴포넌트 | Sell Kind(일반 Burger, 드라이브스루 Packed Burger → 재고 Pile이 이 종류만 받음), Stock, Service Point, Queue(드라이브스루는 차량 줄), Money Pile. `ISupplyTarget` |
-| `PackingTable` | 포장. 투입 칸 버거 4개 이상 + 출력 칸 여유 + 포장 위치에 사람 → 진행도가 차면 버거 4개 소모, 포장 버거 1개 출력. 자리 비우면 진행도 유지 | Input(버거, 상한 8), Output(포장 버거, 상한 4), Pack Point, Gauge Root·Gauge Fill(선택). 플레이어 0.5초, 알바 2초 ÷ 행동 속도. `ISupplyTarget`(버거) |
+| `PackingTable` | 포장. 투입 칸 버거 4개 이상 + 출력 칸 여유 + 포장 위치에 사람 → 진행도가 차면 버거 4개 소모, 포장 버거 1개 출력. 자리 비우면 진행도 유지 | Input Capacity(버거, 기본 8, 0 = 무제한), Output Capacity(포장 버거, 4). Input·Output의 PickupPile Capacity는 이 값으로 덮어씀, Pack Point, Gauge Root·Gauge Fill(선택). 플레이어 0.5초, 알바 2초 ÷ 행동 속도. `ISupplyTarget`(버거) |
 | `SupplyTargets` | 물건을 채워 줘야 하는 곳 목록 (`ISupplyTarget`: Kind, Shortage, Receiver) | 카운터·드라이브스루(줄 남은 주문량 − 재고), 포장 테이블(출력 칸을 채우는 데 필요한 버거). 알바 운반 판단용 |
 | `TrashBin` | 쓰레기를 받아 풀에 반납. 용량·보상 없음 | 같은 오브젝트에 `InteractionZone` |
 | `Table` | 2인 합석 테이블. 좌석 예약, 가운데 공유 음식으로 함께 식사, 쓰레기·팁, 강제 청소 (5.3) | Seats[2](Sit Point = 손님 위치·방향), Food Pile·Trash Pile(가운데, `PickupPile` 재사용), Tip Pile. `TryReserveNearest`, `SeatedSinceClean`, `TrashCount`, `IsMustClean` |
@@ -237,6 +237,11 @@ stateDiagram-v2
 | --- | --- | --- |
 | `QueueMember` | 줄 서는 대상의 공통 동작 (추상 클래스, 5.2 상태). 입구 → 줄 → 주문 수량만큼 수령 → 출구 | `Begin(queue, 입구 안쪽 점, 출구 경로)`, `Serve(food)`(1개씩, 머리 위에 쌓음), `State`, `OrderCount`, `ReceivedCount`. 재정의: `RollOrderCount`, `TryPrepareForService`, `OnServed`, `UpdateServed`. Item Anchor(비우면 높이 2.1) |
 | `Customer` | 매장 손님 (`QueueMember` 상속). 좌석 예약 → 주문 수령 → 좌석으로 직선 이동 → 테이블 공유 식사 → 함께 퇴장 | 프리팹 루트는 **발 위치(Y 0)**. Order Range(일반 1~4, VIP 6~10), Tip Multiplier(일반 1, VIP 3). 일반·VIP는 같은 컴포넌트, 프리팹만 다름 |
+| `DeliveryConfig` | 배달 데이터 (ScriptableObject, `Create > BurgerIdle > Delivery Config`) | 품목(버거), 수량 5~10, 제한 시간 90초, 보상 배율 2, 첫 등장 5초, 재등장 30초, 이동속도, 급한 시간 20초, 품목 아이콘 |
+| `DeliveryPoint` | 배달 지점. 배달원이 주문 중일 때만 받는 곳(`IPickupReceiver`) + 채울 곳(`ISupplyTarget`, 우선순위 Order/Urgent)으로 등록 → 플레이어 자동 제출·알바 운반 | `InteractionZone` 필요(제출 범위). Stand Point(배달원 서는 위치·방향, 비우면 자기 자신) |
+| `DeliveryRider` | 배달원. 입구 → 배달 지점 → 주문(제한 시간) → 성공·실패 → 출구 → 풀 반납. 제출분은 머리 위에 쌓이고 실패 시 삭제 | 프리팹 루트(발 위치 Y 0). Item Anchor |
+| `DeliverySpawner` | 배달원 보내기. Open Zone(비우면 속한 Zone의 Facilities) 해금 후, 한 번에 1명, 종료 후 재등장. 성공 보상(판매가·경험치 × 수량 × 배율, 돈은 수익 배율) 즉시 입금, 알림(SPECIAL ORDER!·성공·실패) | Prefab, Config, Point, Area, 사람 입구·출구 |
+| `DeliveryBubble` | 배달원 말풍선. 주문 중에만, 남은 시간(분:초, 급하면 빨강)·제출/필요·아이콘, 카메라를 향함 | 배달원 프리팹 안 World Space Canvas. Root, Time Text, Count Text, Icon(선택). "SPECIAL ORDER"는 고정 텍스트 |
 | `Vehicle` | 드라이브스루 차량 (`QueueMember` 상속, 기본 동작). 포장 버거 1개 받으면 바로 차량 출구로 퇴장 | 프리팹 루트 발 위치(Y 0). Item Anchor로 받은 봉투 위치 지정(창문 쪽). 스포너는 `CustomerSpawner` 재사용(Vehicle Entrance / Vehicle Exit) |
 | `CustomerQueue` | 경로 점을 따라 슬롯 자동 계산. 앞이 비면 경로 따라 전진. 차량 줄에도 재사용 | Path: P0 = 카운터 앞(맨 앞), 마지막 = 줄 끝(입구 쪽). 꺾인 줄 가능. 노란 선·원으로 표시 |
 | `CustomerSpawner` | Area 입구에서 입장 간격마다 생성. 줄이 차면 멈춤 | Prefab(`QueueMember`), **Variants**(프리팹 + 가중치, 예: 일반 9 : VIP 1), Queue, **Area**, Entrance Type·Exit Type(기본 사람 입구·출구, 차량은 차량 입구·출구), **Open Zone**(이 구역 완료 후 시작, 비우면 즉시) |
@@ -288,7 +293,7 @@ stateDiagram-v2
 
 | 스크립트 | 역할 | 비고 |
 | --- | --- | --- |
-| `Worker` | 알바. 일 고르기 → NavMesh 이동 → 작업 → 다음 일. 동적 우선순위: 들고 있는 것 처리 > 막힌 좌석·강제 청소 > 판매(`Counter.NeedsSeller`, 일반·드라이브스루) > 포장(`PackingTable.NeedsPacker`) > 운반(모자란 `ISupplyTarget` → 그 종류를 내주는 가까운 곳, 많이 모자란 곳 우대) > 일반 청소, 같으면 가까운 순 | 프리팹 루트에 `NavMeshAgent` + `CarryStack` + `Worker`. 지나가며 자동 줍기 없음. 할 일 없으면 제자리 대기 |
+| `Worker` | 알바. 일 고르기 → NavMesh 이동 → 작업 → 다음 일. 동적 우선순위: 들고 있는 것 처리 > 막힌 좌석·강제 청소 > 판매(`Counter.NeedsSeller`, 일반·드라이브스루) > 포장(`PackingTable.NeedsPacker`) > 운반(모자란 `ISupplyTarget` → 그 종류를 내주는 가까운 곳, 많이 모자란 곳 우대) > 일반 청소, 같으면 가까운 순 | 프리팹 루트에 `NavMeshAgent` + `CarryStack` + `Worker`. 지나가며 자동 줍기 없음. 할 일 없으면 제자리 대기. 회피(Obstacle Avoidance) 끔 → 알바·플레이어끼리 밀지 않고 겹쳐 지나감. 작업 중 위치를 벗어나면 다시 걸어감 |
 | `TaskBoard` | 작업 대상 예약 (static) | 한 대상은 알바 한 명만 |
 | `WorkerManager` | 인원수 스탯이 오르면 직원 대기 지점에서 알바 생성 | Prefab, Spawn Point |
 
@@ -339,7 +344,7 @@ Player / Main Camera / Directional Light
 
 - 그룹 오브젝트(Area, Zones, ZoneN, Floor, Objects 등)는 위치·회전 0, 크기 1로 둔다. Zone 루트는 위치를 옮겨도 된다(자식이 그 기준으로 배치됨).
 - 새 Zone은 직전 Zone을 복제해 내용을 바꾸고, ZoneManager는 Hierarchy 순서대로 연다.
-- **확장 박스는 "그 Zone을 여는 박스"다.** 이전 Zone 아래에 두거나 Target에 다음 Zone을 넣지 않는다 (Target이 있으면 경고).
+- **확장 박스는 "그 Zone을 여는 박스"다.** 이전 Zone 아래에 두거나 Target에 다음 Zone을 넣지 않는다 (Target이 있으면 경고). Facilities 안의 시설 박스를 확장 박스로 연결하지 않는다 (숨겨진 Facilities 안이라 영영 보이지 않음, 경고).
 - **칸막이 벽:** 이전 Zone Floor 안의 경계 벽을 다음 Zone의 `Remove On Expand` 칸에 직접 연결한다.
 - Facilities가 없는(해금 박스 0개) Zone은 열리자마자 다음 확장 박스가 나타난다. 시작 공간이면 처음부터 나타난다.
 - Objects 안의 오브젝트는 해금 박스의 Target이어야 해금 전에 숨겨진다. 쓰레기통처럼 Zone과 함께 나타날 것은 Floor에 넣는다.
@@ -441,8 +446,8 @@ ObjectPools.Release(component);     // 그 외 컴포넌트
 | P8 | 레벨업(`LevelTable`), 업그레이드 데이터·패널, 해금 박스 레벨 검사 |
 | P9 | 알바 AI(`TaskBoard`), 플레이어 가로채기, 알바 판매 간격 1초 → 업그레이드로 감소 (P11에서 행동 속도로 변경) |
 | P10 | `ZoneManager`, ZoneStart(매장 밖) → Zone 0(매장 구매) → Zone 1(플레이어·알바 업그레이드 패드) |
-| P11 | Zone 2 드라이브스루 (마지막 Zone): 받는 종류 필터, 포장 테이블, 포장 버거, 차량 손님 |
-| ~~P12~~ | ~~Zone 3 배달~~ → 제외 (2026-10-13 범위 축소) |
+| P11 | Zone 2 드라이브스루: 받는 종류 필터, 포장 테이블, 포장 버거, 차량 손님 |
+| P12 | Zone 3 배달: `DeliveryPoint`(주문 중에만 받는 곳), `DeliveryRider`, `DeliverySpawner`, `DeliveryBubble`, 즉시 입금 |
 | P13 | 진상 손님, 연출 정리, 종료 화면 |
 | P14 | 저장/불러오기, 오프라인 보상 |
 

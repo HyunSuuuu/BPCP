@@ -8,8 +8,9 @@ namespace BurgerIdle.Workers
 {
     /// <summary>
     /// 알바. 할 일을 스스로 골라 NavMesh로 이동해 처리한다. 모든 알바가 모든 일을 한다.
-    /// 우선순위(상황에 따라 바뀜): 들고 있는 것 처리 > 막힌 좌석 청소 > 판매(일반·드라이브스루, 실제로 팔 수 있을 때) >
-    /// 포장 > 운반(모자란 곳이 있을 때, 많이 모자란 곳 우선) > 일반 청소. 같으면 가까운 순.
+    /// 우선순위(상황에 따라 바뀜): 들고 있는 것 처리 > 막힌 좌석 청소 > 배달 운반(남은 시간 임박) >
+    /// 판매(일반·드라이브스루, 실제로 팔 수 있을 때) > 배달 운반 > 포장 > 재고 운반(모자란 곳이 있을 때, 많이 모자란 곳 우선) > 일반 청소.
+    /// 같으면 가까운 순.
     /// 운반은 모자란 곳(ISupplyTarget: 카운터, 드라이브스루, 포장 테이블)을 먼저 정하고, 그 종류를 내주는 가장 가까운 곳에서 집는다.
     /// 플레이어처럼 지나가며 자동으로 줍지 않고, 맡은 일의 대상에서만 줍고 내려놓는다.
     /// 플레이어가 먼저 일을 해 버리면(대상이 비거나 응대·포장 위치를 차지) 일을 포기하고 다음 일로 넘어간다.
@@ -24,7 +25,9 @@ namespace BurgerIdle.Workers
 
         // 우선순위 (높을수록 먼저). 같은 우선순위면 가까운 쪽
         const float PriorityCleanUrgent = 4f; // 좌석이 없어 손님이 막혔거나 강제 청소 테이블
+        const float PriorityOrderUrgent = 3.5f; // 남은 시간이 얼마 없는 배달 주문 운반
         const float PrioritySell = 3f;        // 맨 앞 손님·차량에게 실제로 팔 수 있을 때만
+        const float PriorityOrder = 2.75f;    // 배달 주문 운반
         const float PriorityPack = 2.5f;      // 포장 재료와 출력 자리가 있을 때만
         const float PriorityCarry = 2f;       // 받는 곳의 재고가 모자랄 때만
         const float PriorityClean = 1f;       // 그 밖의 쓰레기
@@ -60,6 +63,9 @@ namespace BurgerIdle.Workers
         {
             agent = GetComponent<NavMeshAgent>();
             stack = GetComponent<CarryStack>();
+
+            // 알바끼리·플레이어와 서로 밀어내지 않는다 (밀려나면 작업 위치를 벗어나 일이 멈춤). 벽·시설은 NavMesh로 계속 피한다
+            agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
         }
 
         public void Init(ReadOnlyReactiveProperty<float> moveSpeed, ReadOnlyReactiveProperty<int> maxCarry, float actionInterval)
@@ -133,6 +139,14 @@ namespace BurgerIdle.Workers
                     if (!IsTaskValid())
                     {
                         Finish();
+                        break;
+                    }
+
+                    // 어떤 이유로든 작업 위치를 벗어났으면 다시 걸어간다 (작업 중 표시인데 실제로는 멈춰 있는 상태 방지)
+                    if (!TargetZone.Contains(transform.position))
+                    {
+                        state = State.Moving;
+                        agent.SetDestination(TargetZone.Center);
                         break;
                     }
 
@@ -210,7 +224,13 @@ namespace BurgerIdle.Workers
                 if (source == null)
                     continue;
 
-                var score = Score(PriorityCarry, source.Zone.Center, position) + Mathf.Min(shortage, 10) * ShortageBonusPerItem;
+                var priority = target.Priority switch
+                {
+                    SupplyPriority.Urgent => PriorityOrderUrgent,
+                    SupplyPriority.Order => PriorityOrder,
+                    _ => PriorityCarry,
+                };
+                var score = Score(priority, source.Zone.Center, position) + Mathf.Min(shortage, 10) * ShortageBonusPerItem;
                 if (score > bestScore)
                 {
                     bestScore = score;

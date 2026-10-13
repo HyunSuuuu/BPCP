@@ -4,12 +4,25 @@ using UnityEngine;
 
 namespace BurgerIdle.Station
 {
+    /// <summary>운반 우선순위. 알바가 운반할 곳을 고를 때 쓴다.</summary>
+    public enum SupplyPriority
+    {
+        /// <summary>재고 채우기 (판매·포장보다 아래)</summary>
+        Normal,
+        /// <summary>특별 주문 (판매 다음, 포장보다 위)</summary>
+        Order,
+        /// <summary>시간이 얼마 안 남은 특별 주문 (급한 청소 다음)</summary>
+        Urgent,
+    }
+
     /// <summary>
-    /// 물건을 채워 줘야 하는 곳 (카운터 재고, 드라이브스루 재고, 포장 테이블 투입 칸).
+    /// 물건을 채워 줘야 하는 곳 (카운터 재고, 드라이브스루 재고, 포장 테이블 투입 칸, 배달 지점).
     /// 알바가 무엇을 어디로 운반할지 고를 때 쓴다.
     /// </summary>
     public interface ISupplyTarget
     {
+        /// <summary>운반 우선순위 (기본 Normal)</summary>
+        SupplyPriority Priority => SupplyPriority.Normal;
         /// <summary>받는 종류</summary>
         PickupKind Kind { get; }
         /// <summary>지금 모자란 개수 (0이면 운반 불필요)</summary>
