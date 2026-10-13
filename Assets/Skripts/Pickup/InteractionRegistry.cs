@@ -9,6 +9,8 @@ namespace BurgerIdle.Pickup
         InteractionZone Zone { get; }
         PickupCategory Category { get; }
         bool HasItem { get; }
+        /// <summary>다음에 꺼낼 물건(맨 위)의 종류가 kind인지 (알바가 필요한 종류를 고를 때 사용)</summary>
+        bool HasKind(PickupKind kind);
         bool TryTake(out PickupObject item);
     }
 

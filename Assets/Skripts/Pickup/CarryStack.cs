@@ -11,6 +11,7 @@ namespace BurgerIdle.Pickup
     /// </summary>
     public sealed class CarryStack : MonoBehaviour
     {
+        [Header("Anchor")]
         [Tooltip("스택이 시작되는 머리 위 지점. 비워 두면 Anchor Height 높이에 자동 생성")]
         [SerializeField] Transform anchor;
         [SerializeField] float anchorHeight = 2.1f;
@@ -63,11 +64,42 @@ namespace BurgerIdle.Pickup
 
         public PickupObject Peek() => items.Count > 0 ? items[items.Count - 1] : null;
 
+        /// <summary>쌓인 물건 (0 = 맨 아래)</summary>
+        public IReadOnlyList<PickupObject> Items => items;
+
+        /// <summary>
+        /// 위에서부터 조건에 맞는 첫 물건. 받는 곳이 맨 위 물건을 못 받아도 그 아래의 받을 수 있는 물건을 고를 때 쓴다.
+        /// </summary>
+        public PickupObject FindFromTop(System.Predicate<PickupObject> match)
+        {
+            for (var i = items.Count - 1; i >= 0; i--)
+            {
+                if (match(items[i]))
+                    return items[i];
+            }
+
+            return null;
+        }
+
+        /// <summary>중간에 있는 물건을 꺼낸다. 위에 있던 물건은 LateUpdate에서 아래로 내려앉는다.</summary>
+        public PickupObject Take(PickupObject item)
+        {
+            if (!items.Remove(item))
+                return null;
+
+            settling.Remove(item);
+            UpdateState();
+
+            item.transform.DOKill();
+            item.AttachTo(null);
+            return item;
+        }
+
         public void Push(PickupObject item)
         {
             var t = item.transform;
             t.DOKill();
-            t.SetParent(anchor, true);
+            item.AttachTo(anchor);
 
             var index = items.Count;
             items.Add(item);
@@ -90,7 +122,7 @@ namespace BurgerIdle.Pickup
             UpdateState();
 
             item.transform.DOKill();
-            item.transform.SetParent(null, true);
+            item.AttachTo(null);
             return item;
         }
 

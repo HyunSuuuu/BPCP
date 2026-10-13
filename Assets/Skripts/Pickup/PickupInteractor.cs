@@ -27,19 +27,23 @@ namespace BurgerIdle.Pickup
                 cooldown = interval;
         }
 
+        /// <summary>범위 안의 받는 곳마다, 받을 수 있는 물건 중 가장 위에 있는 것을 내려놓는다.</summary>
         bool TryDrop()
         {
-            var top = stack.Peek();
-            if (top == null)
+            if (stack.Peek() == null)
                 return false;
 
             var position = transform.position;
             foreach (var receiver in InteractionRegistry.Receivers)
             {
-                if (!receiver.Zone.Contains(position) || !receiver.CanReceive(top))
+                if (!receiver.Zone.Contains(position))
                     continue;
 
-                receiver.Receive(stack.Pop());
+                var item = stack.FindFromTop(receiver.CanReceive);
+                if (item == null)
+                    continue;
+
+                receiver.Receive(stack.Take(item));
                 return true;
             }
 

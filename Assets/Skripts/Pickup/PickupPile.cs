@@ -11,9 +11,13 @@ namespace BurgerIdle.Pickup
     /// </summary>
     public sealed class PickupPile : MonoBehaviour
     {
+        [Header("Storage")]
+        [Tooltip("보관하는 분류 (Food / Trash)")]
         [SerializeField] PickupCategory category = PickupCategory.Food;
         [Tooltip("최대 보관 개수 (0이면 무제한)")]
         [SerializeField] int capacity = 8;
+        [Tooltip("받는 종류. 비우면 Category의 모든 종류.\n카운터·포장 테이블·드라이브스루는 코드가 자동으로 정한다")]
+        [SerializeField] List<PickupKind> acceptedKinds = new List<PickupKind>();
 
         [Header("Layout")]
         [Tooltip("첫 번째 칸의 위치 (이 오브젝트 기준). 받침대 위에 쌓으려면 Y를 받침대 윗면 높이로")]
@@ -46,13 +50,27 @@ namespace BurgerIdle.Pickup
         /// <summary>업그레이드로 재고 상한이 바뀔 때 호출한다.</summary>
         public void SetCapacity(int value) => capacity = Mathf.Max(0, value);
 
-        public bool CanAdd(PickupObject item) => item.Category == category && !IsFull;
+        /// <summary>맨 위 물건의 종류. 비어 있으면 null.</summary>
+        public PickupKind? TopKind => items.Count > 0 ? (PickupKind?)items[items.Count - 1].Kind : null;
+
+        /// <summary>받는 종류를 지정한다 (비우면 Category의 모든 종류).</summary>
+        public void SetAcceptedKinds(params PickupKind[] kinds)
+        {
+            acceptedKinds.Clear();
+            acceptedKinds.AddRange(kinds);
+        }
+
+        public bool Accepts(PickupKind kind) =>
+            (kind == PickupKind.Trash ? PickupCategory.Trash : PickupCategory.Food) == category &&
+            (acceptedKinds.Count == 0 || acceptedKinds.Contains(kind));
+
+        public bool CanAdd(PickupObject item) => Accepts(item.Kind) && !IsFull;
 
         public void Add(PickupObject item)
         {
             var t = item.transform;
             t.DOKill();
-            t.SetParent(transform, true);
+            item.AttachTo(transform);
             t.DOLocalJump(SlotPosition(items.Count, item), jumpPower, 1, jumpDuration);
             t.DOLocalRotateQuaternion(Quaternion.identity, jumpDuration);
 
@@ -73,7 +91,22 @@ namespace BurgerIdle.Pickup
             count.Value = items.Count;
 
             item.transform.DOKill();
-            item.transform.SetParent(null, true);
+            item.AttachTo(null);
+            return true;
+        }
+
+        /// <summary>맨 위부터 count개를 꺼내 풀에 반납한다 (포장 재료 소모). 모자라면 아무것도 하지 않고 false.</summary>
+        public bool TryConsume(int amount)
+        {
+            if (items.Count < amount)
+                return false;
+
+            for (var i = 0; i < amount; i++)
+            {
+                TryTakeTop(out var item);
+                item.Release();
+            }
+
             return true;
         }
 

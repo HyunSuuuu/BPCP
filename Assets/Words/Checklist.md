@@ -11,13 +11,13 @@
 | --- | --- | --- | --- |
 | P0~P5 | 준비, 이동, 재화, 픽업, 해금 박스, 핵심 루프 | 6.1~6.7, 6.11 | ✅ 완료 |
 | P6 | Area · 출입문 | 6.12 | ✅ 완료 |
-| **P7** | **테이블 · 쓰레기 · 강제 청소** | 6.9, 6.10 | ▶ **다음 작업** |
-| P8 | 레벨업 · 업그레이드 | 8장 | 대기 |
-| P9 | 알바 AI | 9장 | 대기 |
-| P10 | ZoneManager · Zone 1 (매장 확장 + 테이블) | 10장 | 대기 |
-| P11 | Zone 2 · 드라이브스루 · 포장 | 6.3, 6.13 | 대기 |
-| P12 | Zone 3 · 배달 | 6.14 | 대기 |
-| P13 | 진상 손님 · Zone 4 · 엔딩 | 6.8, 10장 | 대기 (❓ 종료 조건, Zone 4) |
+| P7 | 테이블 · 쓰레기 · 강제 청소 · 주문 수량 · VIP | 6.5, 6.7, 6.9, 6.10 | ✅ 완료 |
+| P8 | 레벨업 · 업그레이드 · HUD 분리 | 8장, 11장 | ✅ 완료 |
+| P9 | 알바 AI | 9장 | ✅ 완료 |
+| P10 | ZoneManager · ZoneStart → Zone 0(매장) → Zone 1(업그레이드 패드) | 10장 | ✅ 완료 |
+| **P11** | **Zone 2 · 드라이브스루 · 포장 (마지막 Zone) · ZoneEnd 알림** | 6.3, 6.13 | ▶ **작업 중** |
+| ~~P12~~ | ~~Zone 3 · 배달~~ | 6.14 | 제외 (2026-10-13 범위 축소: Zone 2에서 마무리) |
+| P13 | 진상 손님 · 엔딩 | 6.8, 10장 | 대기 (❓ 종료 조건) |
 | P14 | 저장 · 오프라인 보상 | 3장 | 대기 |
 
 ---
@@ -131,68 +131,98 @@ GDD 6.12 기준. 드라이브스루 차량(P11)과 배달원(P12)이 같은 구�
 
 ## P7. 테이블 · 좌석 예약 · 쓰레기 · 강제 청소
 
-- [ ] `Table`: Seats[2], SeatedSinceClean, TrashCount(`ReactiveProperty`), TipPile
-- [ ] 줄 맨 앞 손님이 가까운 입장 가능 테이블의 빈 좌석 예약 → 성공해야 판매 진행
-- [ ] 예약 시 SeatedSinceClean++, 2가 되면 MustClean (식사 중인 손님은 계속)
-- [ ] Customer 상태 확장: Served → MoveToTable → Eating(8초) → Leaving
-- [ ] 식사 종료: 좌석 비움, 쓰레기 1개(좌석 위치에 표시), 팁 3 → 테이블 팁 더미
-- [ ] 쓰레기 픽업(음식 소지 시 불가) → 쓰레기통에서 0.1초/개 버리기, 보상 없음
-- [ ] 초기화: 예약·착석 0명 && TrashCount 0 → SeatedSinceClean = 0
-- [ ] 팁 수거는 테이블 상태와 독립
-- [ ] 테스트용 쓰레기 공급기(`DebugPickupFeeder`) 제거
-- **완료 기준:** 좌석이 없으면 판매 안 됨 / 청소해야 테이블이 다시 열림 / 번갈아 입장해도 강제 청소 발동 (GDD 6.9 예시 1·2 검증)
+- [x] `Table`: Seats[2](Sit Point), 가운데 공유 FoodPile·TrashPile, TipPile, SeatedSinceClean(`ReactiveProperty`)
+- [x] 줄 맨 앞 손님이 가까운 입장 가능 테이블의 빈 좌석 예약 → 성공해야 판매 진행
+- [x] 예약 시 SeatedSinceClean++, 2가 되면 MustClean (식사 중인 손님은 계속)
+- [x] 주문 수량: 일반 1~4개, VIP 6~10개. 0.1초에 1개씩 주문 수량만큼 판매, 재고 부족 시 맨 앞에서 대기, 머리 위에 쌓임
+- [x] `OrderBubble`: 줄 맨 앞 손님 머리 위 "받은 수/주문 수", 카메라를 향함
+- [x] VIP 손님: 다른 색 프리팹(`Customer` Order Range 6~10, Tip Multiplier 3), `CustomerSpawner` Variants 가중치(일반 9 : VIP 1)
+- [x] Customer 상태 확장: Served → 좌석까지 직선 이동 → 음식을 테이블 가운데에 내려놓음 → 공유 식사 → 함께 Leaving(Area 출구)
+- [x] 공유 식사: 버거당 1.5초마다 음식 더미에서 1개씩 줄어듦(먹는 연출), 더미가 비면 종료. 기본 식사 시간 없음, 합석하면 버거가 더해져 연장
+- [x] 식사 종료: 먹은 버거 1개당 쓰레기 1개(가운데 TrashPile), 앉은 손님마다 팁 3(VIP 3배) → 팁 더미, 함께 퇴장
+- [x] (사용자) 테이블에 `Table` + 좌석 Sit Point + 가운데 FoodPile·TrashPile(+`InteractionZone`, `PickupSource`) + 팁 더미 배치, `GameConfig`에 Trash Prefab 연결
+- [x] (사용자) VIP 손님 프리팹, 손님 프리팹에 주문 말풍선 UI
+- [x] `DebugCheats` T 키: 게임 속도 1배 ↔ 3배
+- [x] 쓰레기 픽업(음식 소지 시 불가) → 쓰레기통에서 0.1초/개 버리기, 보상 없음
+- [x] 초기화: 예약·착석 0명 && TrashCount 0 → SeatedSinceClean = 0
+- [x] 팁 수거는 테이블 상태와 독립
+- [ ] 테스트용 쓰레기 공급기(`DebugPickupFeeder`) 제거 (씬에서 TrashFactory 삭제 후 스크립트 삭제)
+- **완료 기준:** 좌석이 없으면 판매 안 됨 / 주문 수량만큼 판매·말풍선 표시 / 공유 식사 후 함께 퇴장 / 청소해야 테이블이 다시 열림 / 번갈아 입장해도 강제 청소 발동 (GDD 6.9 예시 1·2 검증) / VIP 등장 ✅
 
 ## P8. 레벨업 · 업그레이드
 
-- [ ] `LevelTable` SO: 경험치 → 레벨, 레벨 `ReactiveProperty`, HUD에 레벨·경험치 바 추가
-- [ ] `UnlockBox` 레벨 검사: 필요 레벨 미달 시 "Lv N 필요" 표시, 투입 안 함
-- [ ] `UpgradeDefinition` SO: id, target, statKey, requiredPlayerLevel, levels[]{cost, value}
-  - [ ] 비용 곡선 `round(baseCost × 1.35^level)`, 효과 선형 증가
-- [ ] `UpgradeManager`: 레벨 `ReactiveProperty<int>`, 스탯 변경 → 구독자 자동 반영
-- [ ] 대상: 플레이어(이동속도, 최대적재량), 버거 기계(초당 생산량, 최대 생산량), 테이블(식사 시간 단축)
-- [ ] ❓ 테이블 강화 단위 전체 공통/테이블별 (14장 9번, 기본값: 공통)
-- [ ] ❓ 카운터 업그레이드 스탯·재고 상한 (14장 7번, 제안: 재고 상한)
-- [ ] `UpgradePanel`: 대상별 탭, 현재/다음 효과·비용, 구매 버튼, DOTween 등장·퇴장, 구매 시 팝
-- **완료 기준:** 업그레이드 구매 시 스탯이 실제로 변함
+- [x] `LevelTable` SO (50 × 1.5^(N-1), 최대 20) + `PlayerLevel`: 누적 경험치 → 레벨·진행도 `ReactiveProperty`
+- [x] HUD: 레벨 텍스트, 경험치 바(Filled), 레벨업 팝업 "LEVEL UP! Lv N" (보상 없음)
+- [x] `UnlockBox` 레벨 검사: 필요 레벨 미달 시 잠금 표시(자물쇠·Lv N), 투입 안 함, 레벨 오르면 자동 해제
+- [x] `UpgradeDefinition` SO: id, 이름, 종류(Category), 스탯(StatKey), 필요 레벨, 최대 레벨, 기본 비용·증가율, 레벨당 변화량
+  - [x] 비용 곡선 `round(baseCost × 1.35^level)`, 스탯 = GameConfig 기본값 + 레벨 × 변화량
+- [x] `UpgradeManager`: 업그레이드 레벨 `ReactiveProperty<int>`, `Stat(key)` 구독으로 플레이어·기계·테이블에 자동 반영, 구매는 `TryPurchase` 한 곳
+- [x] 대상: 플레이어(이동속도, 최대적재량, 수익 배율 x1~x10 반올림), 버거 기계(초당 생산량, 최대 재고), 테이블(버거 1개 먹는 시간, 모든 테이블 공통)
+- [x] ~~❓ 테이블 강화 단위~~ → 모든 테이블 공통
+- [x] ~~❓ 카운터 업그레이드~~ → 없음, 재고 무제한
+- [x] `UpgradePad`: 바닥 패드에 들어가면 패널 열림·벗어나면 닫힘, 패드별 보여 줄 종류 지정(탭 대체)
+- [x] `UpgradePanel` + `UpgradeEntryView`: 카드 가로 나열(Horizontal Layout), 제목(패드별), X 닫기, 카드 = 이름·아이콘·업그레이드 횟수 칸·광고 버튼·돈 버튼·레벨 부족 표시, DOTween 등장·퇴장, 구매 시 팝`n- [x] 광고 시뮬레이션: 2초 시청 표시 → 무료 1레벨, 항목별 재사용 대기 30초 (``GameConfig`` Ad Duration·Ad Cooldown)
+- [x] (사용자) LevelTable·UpgradeDefinition 에셋, 업그레이드 패드, 패널·항목 UI 프리팹, HUD 레벨 UI
+- [x] HUD 분리: `Hud`(진입점) + `MoneyView`, `LevelView`("현재 / 필요량"), `NotificationPopup`(범용 알림), `CountUpText`(공용 숫자 연출), 전체 컴포넌트 인스펙터 Header 정리
+- [x] (사용자) 돈·레벨·알림을 요소별 프리팹으로 만들어 HUD Canvas에 배치
+- **완료 기준:** 업그레이드 구매 시 스탯이 실제로 변함, 레벨 조건이 업그레이드·해금 박스에 적용됨
 
 ## P9. 알바 AI
 
-- [ ] ❓ 알바 Role 분리 여부 (14장 5번)
-- [ ] `Worker`: 초록 Capsule, 이동속도 3.5, 적재량 3, 돈 수거 안 함
-- [ ] `WorkerFsm`: Idle → Move → Work → Idle, 직선 이동 + 웨이포인트
-- [ ] `TaskBoard` / `Task`: 운반, 청소(MustClean 우선), 판매 등록·예약(Reserve)
-  - [ ] 우선순위: 판매 > 운반 > 청소, 같은 우선순위는 가까운 순 (진상·드라이브스루·배달 Task는 각 단계에서 추가)
-- [ ] Move·Work 중 Task 유효성 주기 검사 → 무효 시 예약 해제 후 다음 Task
-- [ ] 응대 위치 플레이어 우선 (알바 양보)
-- [ ] 들고 있는 물건 먼저 처리(음식 → 카운터, 쓰레기 → 쓰레기통)
-- [ ] 알바 판매 간격 1초 (업그레이드로 감소), 알바용 판매 게이지 필요 여부 검토
-- [ ] 알바 업그레이드: 인원수(0명 시작, 첫 업그레이드 = 첫 고용, 기본 비용 100), 이동속도, 적재량, 판매 간격
+- [x] ~~❓ 알바 Role 분리 여부~~ → 모든 알바가 모든 일
+- [x] `Worker`: NavMeshAgent 이동, 이동속도 3.5, 적재량 3, 돈 수거 안 함, 맡은 대상에서만 줍기·내려놓기, 할 일 없으면 제자리 대기
+- [x] 일 고르기 (동적): 들고 있는 것 처리 > 막힌 좌석·강제 청소 > 판매(실제로 팔 수 있을 때) > 운반(재고 < 줄의 남은 주문량일 때만) > 일반 청소, 같으면 가까운 순. 재고 충분 시 운반 안 하고 대기
+- [x] `TaskBoard`: 대상(기계 출력·테이블 쓰레기·카운터) 1명 예약
+- [x] 가로채기: 이동 중 대상이 비면 포기, 플레이어가 응대 위치에 들어오면 판매 양보 → 다음 일
+- [x] `Counter`: 플레이어 우선, 없으면 응대 위치에 도착한 알바가 판매 (알바 간격 1초, 게이지 없음)
+- [x] `WorkerManager`: 인원수 스탯이 오르면 직원 대기 지점에서 생성
+- [x] NavMesh: 시작 시·해금 후 다시 굽기 (`NavMeshSurface`)
+- [x] 알바 업그레이드(Category Worker): 고용(인원수 0~4), 이동속도, 적재량, 판매 간격(하한 0.2초)
+- [x] (사용자) 알바 프리팹, 직원 대기 지점, `WorkerManager`, 바닥 `NavMeshSurface`, 알바 업그레이드 에셋·패드
 - **완료 기준:** 알바가 자동으로 일하고, 플레이어가 가로채면 다음 작업으로 넘어감
+## P10. 구역 확장 · ZoneStart → Zone 0 → Zone 1
 
-## P10. 구역 확장 · Zone 1
+구역 구성 (2026-10-13 변경): **ZoneStart**(매장 밖, 시작 위치) → **Zone 0**(매장 구매: 카운터·버거 기계·테이블) → **Zone 1**(플레이어·알바 업그레이드 패드) → **Zone 2**(드라이브스루, P11에서 마무리)
 
-- [ ] `ZoneManager`: 이전 Zone 완료 시 다음 Zone 확장 박스 노출
-- [ ] Zone 해금 = 매장 공간 확장 (바닥·벽), 확장 후 내부 시설 해금 박스 노출
-- [ ] (사용자) Zone 1 확장 바닥·벽, 확장 박스(100 / Lv 2), 테이블 2개 해금 박스(각 80) 배치
-- [ ] 추가 테이블 팁 더미
-- [ ] 해금 시 솟아오르는 Scale 트윈, 카메라 범위 확장
-- **완료 기준:** Zone 0 완료 후 Zone 1 확장 박스가 나타나고, 확장 후 테이블을 해금해 손님이 사용
+> P10 테스트 완료 (2026-10-13): NavMesh 갱신·플레이어 막힘 해결, 손님 스폰 시점 해결, 레벨 0 시작 확인
 
+- [x] `ZoneManager` + `Zone`: Zones 아래 Zone을 Hierarchy 순서대로, 각 Zone은 자식 Floor·RemoveOnExpand·Expansion·Facilities·Objects로 구성, Expansion 있는 Zone은 시작 시 숨김
+- [x] 단계적 등장: 이전 Zone 시설 완료 → 확장 박스 → 확장 시 바닥·벽 솟아오름 + 칸막이 벽 내려감 → 시설 박스 등장
+- [x] 시설(Facilities) 없는 Zone: 시작 공간이면 처음부터, 아니면 열리자마자 다음 확장 박스 등장 (ZoneStart용)
+- [x] `Zone` 인스펙터 칸마다 연결 대상 툴팁, 확장 박스에 Target이 있으면 경고
+- [x] NavMesh: 숨긴 뒤 굽기, 해금 후 제자리 갱신(`UpdateNavMesh`)으로 위에 있던 플레이어·알바 유지
+- [x] 플레이어 이동을 NavMesh 안으로 제한 (`NavMeshAgent.Move`, 루트 높이를 Base Offset으로 자동 설정, NavMesh 없으면 바닥 사각형)
+- [x] (사용자) `TableSet` 프리팹 (빈 루트 아래 해금 박스 + 테이블 형제 배치, Target = 같은 프리팹의 Table)
+- [x] (사용자) ZoneStart 바닥, Zone 0 바닥·벽·출입문 벽, Zone 1 바닥·벽, 확장 Definition(Zone 0 = 40, Zone 1 = 400 / Lv 2)
+- [x] (사용자) 확장 박스를 "여는 Zone" 아래로 이동 + Target 비우기, 칸막이 벽을 Zone 1의 Remove On Expand에 연결
+- [x] (사용자) CustomerSpawner를 Facilities 밖(Zone 0/Object)으로
+- [x] (사용자) Zone 1 Facilities: `PlayerPadSet`, `WorkerPadSet` (해금 박스 200 / Lv 4 + 패드)
+- [x] `CustomerSpawner`: Open Zone이 비면 속한 Zone의 Facilities를 사용 (매장 시설 해금 전 손님 입장 버그)
+- [x] `NavMeshIgnore`: 손님·픽업 물건·돈·플레이어를 NavMesh 굽기에서 제외 (다시 구울 때 그 자리에 구멍이 생겨 플레이어가 막히던 문제)
+- [x] ~~❓ 버거 기계·테이블 업그레이드 패드 위치~~ → 사용자가 추후 직접 배치
+- [x] 레벨 0 시작: `LevelTable.startLevel`(0), `PlayerLevel.RaiseTo`, `UnlockDefinition.grantLevel` (Unlock_Zone0 = 1) → 매장 해금 시 Lv 1
+- [x] 해금 박스 필요 레벨 텍스트를 숫자만 표시 ("Lv 1" → "1")
+- **완료 기준:** 매장 밖에서 시작 → Zone 0 구매 → 시설 3종 해금 시 손님 입장 → Zone 1 확장 → 업그레이드 패드 해금 → Zone 2 확장 박스 등장
 ## P11. Zone 2 · 드라이브스루 · 포장
 
-- [ ] 받는 곳별 받는 종류(Kind) 필터: 일반 카운터(버거·커피), 포장 테이블(버거), 드라이브스루(포장 버거)
-- [ ] 스택 내려놓기: 받을 수 있는 것 중 가장 위에 있는 것부터
-- [ ] `PickupKind.PackedBurger` + (사용자) 포장 버거 프리팹
-- [ ] `PackingTable`: 버거 투입 칸(8), 포장 위치, 출력 칸(4), 버거 4개 → 포장 1개
-  - [ ] 사람이 서 있어야 진행 (플레이어 0.5초, 알바 2초), 자리 비우면 진행도 유지
-  - [ ] 포장 진행도 월드 게이지
-- [ ] 드라이브스루 카운터: 포장 버거 재고, 창구(응대 위치), 차량 1대 = 포장 1개, 50원·경험치 20, 돈 더미
-- [ ] 차량 손님: `CustomerQueue` 재사용 (간격 3.0, 최대 4대, 속도 4, 입장 6초), 차량 출입문 사용, 받으면 바로 퇴장
-- [ ] Zone 2 확장(200 / Lv 4) → 포장 테이블(150), 드라이브스루 카운터(200), 완료 시 차량 등장
-- [ ] 알바 Task: 포장 운반, 포장, 드라이브스루 운반, 드라이브스루 판매
-- **완료 기준:** 버거 → 포장 → 드라이브스루 판매 → 돈 더미 수거 1바퀴, 포장 버거가 일반 카운터에 들어가지 않음
+결정 (2026-10-13): Zone 2에 도로 추가, 차량 출구 따로, 경로 점 사용자 배치, 확장·시설 가격은 사용자가 조정, 포장 버거 = 버거 판매가 × 4 × 1.5 (포장 추가금), 알바 판매 간격 → 행동 속도(판매·포장 속도 배율), 알바 최대 6명, 종료 = ZoneEnd 해금 시 알림
 
-## P12. Zone 3 · 배달
+- [ ] 받는 곳별 받는 종류(Kind) 필터: 일반 카운터(버거, `Counter.Sell Kind`), 포장 테이블(버거), 드라이브스루(포장 버거) — `PickupPile.SetAcceptedKinds`
+- [ ] 스택 내려놓기: 받을 수 있는 것 중 가장 위에 있는 것부터 (플레이어·알바 공통)
+- [ ] `PickupKind.PackedBurger`, `GameConfig` Packing·Drive-thru 항목 (버거 수 4, 배율 1.5, 플레이어 0.5초, 알바 2초, 포장 버거 프리팹), `PriceOf`/`ExpOf`
+- [ ] `PackingTable`: 투입 칸(8), 포장 위치, 출력 칸(4), 버거 4개 → 포장 1개, 자리 비우면 진행도 유지, 월드 게이지(선택)
+- [ ] 드라이브스루 카운터 = `Counter` 재사용 (Sell Kind = Packed Burger, 차량 줄)
+- [ ] `Vehicle`(QueueMember): 포장 버거 1개 받으면 바로 차량 출구로 퇴장. `CustomerSpawner`·`CustomerQueue` 재사용
+- [ ] 알바 행동 속도 (`StatKey.WorkerActionSpeed`, 기본 1배 ~ 최대 5배): 판매 간격 = 1초 ÷ 속도, 포장 간격 = 2초 ÷ 속도
+- [ ] 알바 Task: 포장(Pack), 운반을 "모자란 곳(ISupplyTarget) → 그 종류를 내주는 가까운 곳" 방식으로 변경 (카운터·드라이브스루·포장 테이블)
+- [ ] 알바 우선순위: 들고 있는 것 > 급한 청소 > 판매(일반·드라이브스루) > 포장 > 운반(많이 모자란 곳 우선) > 일반 청소
+- [ ] `UnlockDefinition.unlockMessage`: 해금 시 알림 팝업 (ZoneEnd 데모 완료 알림에 사용)
+- [ ] (사용자) 포장 버거 프리팹, 차량 프리팹, 차량용 CustomerConfig, PackingTableSet·DriveThruSet 프리팹
+- [ ] (사용자) Zone 2 바닥·도로·벽, 차량 입구·출구(AreaGate), 차량 줄 경로 점, 차량 스포너
+- [ ] (사용자) ZoneEnd (Zone + Expansion, Definition의 Unlock Message 입력), 알바 업그레이드 에셋 이름 정리(행동 속도)
+- **완료 기준:** 버거 → 포장 → 드라이브스루 판매 → 돈 더미 수거 1바퀴, 포장 버거가 일반 카운터에 들어가지 않음, 알바가 포장·드라이브스루까지 처리, ZoneEnd 해금 시 알림
+
+## ~~P12. Zone 3 · 배달~~ (제외: 2026-10-13 범위 축소, Zone 2에서 마무리. 필요해지면 아래 계획으로 재개)
 
 - [ ] `DeliveryConfig` SO: 주문 품목(버거), 수량 5~10, 제한 시간 90초, 개당 보상 15·경험치 5, 재등장 30초
 - [ ] `DeliverySpawner`: 시작 조건(`UnlockZone` 또는 `UnlockBox`), 한 번에 1명, 종료 후 30초 뒤 재등장
@@ -204,7 +234,7 @@ GDD 6.12 기준. 드라이브스루 차량(P11)과 배달원(P12)이 같은 구�
 - [ ] 알바 Task: 배달 제출 (제한 시간 임박 시 우선)
 - **완료 기준:** 제한 시간 안에 제출하면 즉시 입금, 실패 시 보상 없이 퇴장, 30초 뒤 재등장
 
-## P13. 진상 손님 · Zone 4 · 마무리
+## P13. 진상 손님 · 마무리
 
 - [ ] 진상 손님 (빨강 Capsule), `CustomerConfig` 파라미터 사용
   - [ ] spawnChance 0.1, maxConcurrent 1
@@ -212,9 +242,8 @@ GDD 6.12 기준. 드라이브스루 차량(P11)과 배달원(P12)이 같은 구�
   - [ ] 근처 시 게이지 0.5/초(중첩 없음), 이탈 시 0.25/초 감소
   - [ ] 해결 시 일반 손님 변환(빨강 → 노랑), 줄 한꺼번에 전진, 보상 15 → 카운터 돈 더미
 - [ ] 알바 Task에 진상 처리 추가
-- [ ] ❓ Zone 4 커피 매장 내용, 손님 주문 종류 (14장 6·13번)
 - [ ] 연출 정리 (트윈 0.15~0.4초, `SetLink`/`DOKill` 점검)
-- [ ] ❓ 데모 종료 조건 → 종료 화면 (14장 12번)
+- [ ] ❓ 데모 종료 조건 → 종료 화면 (14장 12번, 후보: Zone 2 완료)
 - [ ] ❓ 튜토리얼 화살표, 리워드 광고 버튼 포함 여부 (14장 3~4번)
 - **완료 기준:** 시작부터 엔딩까지 플레이 가능
 

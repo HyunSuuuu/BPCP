@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using BurgerIdle.Core;
+using BurgerIdle.Economy;
 using BurgerIdle.Pickup;
 using DG.Tweening;
 using R3;
@@ -22,6 +23,7 @@ namespace BurgerIdle.Money
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => active.Clear();
 
+        [Header("Layout")]
         [Tooltip("첫 칸의 위치 (이 오브젝트 기준)")]
         [SerializeField] Vector3 origin = new Vector3(0f, 0.03f, 0f);
         [Tooltip("가로 칸 수 (X)")]
@@ -37,6 +39,7 @@ namespace BurgerIdle.Money
         readonly ReactiveProperty<int> totalAmount = new ReactiveProperty<int>(0);
 
         MoneyObject prefab;
+        ReadOnlyReactiveProperty<float> incomeMultiplier;
 
         public InteractionZone Zone { get; private set; }
         public ReadOnlyReactiveProperty<int> TotalAmount => totalAmount;
@@ -52,11 +55,18 @@ namespace BurgerIdle.Money
 
         void OnDisable() => active.Remove(this);
 
-        public void Init(MoneyObject prefab) => this.prefab = prefab;
+        /// <param name="incomeMultiplier">수익 배율 (플레이어 업그레이드). 쌓는 금액에 곱해 반올림한다</param>
+        public void Init(MoneyObject prefab, ReadOnlyReactiveProperty<float> incomeMultiplier)
+        {
+            this.prefab = prefab;
+            this.incomeMultiplier = incomeMultiplier;
+        }
 
-        /// <summary>금액을 돈 오브젝트로 쌓는다. from에서 튀어나와 자리에 놓인다.</summary>
+        /// <summary>금액(수익 배율 적용 전)을 돈 오브젝트로 쌓는다. from에서 튀어나와 자리에 놓인다.</summary>
         public void Add(int amount, Vector3 from)
         {
+            if (incomeMultiplier != null)
+                amount = CurrencyManager.ApplyMultiplier(amount, incomeMultiplier.CurrentValue);
             if (amount <= 0)
                 return;
 
@@ -78,7 +88,7 @@ namespace BurgerIdle.Money
             money.Amount = amount;
 
             var t = money.transform;
-            t.SetParent(transform, true);
+            money.AttachTo(transform);
             t.DOLocalJump(SlotPosition(stack.Count), 1f, 1, 0.3f);
             t.DOLocalRotateQuaternion(Quaternion.identity, 0.3f);
             stack.Add(money);
@@ -98,7 +108,7 @@ namespace BurgerIdle.Money
             totalAmount.Value -= money.Amount;
 
             money.transform.DOKill();
-            money.transform.SetParent(null, true);
+            money.AttachTo(null);
             return true;
         }
 

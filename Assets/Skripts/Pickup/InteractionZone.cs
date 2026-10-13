@@ -7,7 +7,10 @@ namespace BurgerIdle.Pickup
     /// </summary>
     public sealed class InteractionZone : MonoBehaviour
     {
+        [Header("Range")]
+        [Tooltip("상호작용 반경 (바닥 평면 거리). 선택하면 초록 원으로 표시")]
         [SerializeField] float radius = 1.2f;
+        [Tooltip("원의 중심 위치 (이 오브젝트 기준)")]
         [SerializeField] Vector3 offset;
 
         public float Radius => radius;

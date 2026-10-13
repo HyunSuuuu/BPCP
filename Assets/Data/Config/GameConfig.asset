@@ -13,17 +13,53 @@ MonoBehaviour:
   m_Name: GameConfig
   m_EditorClassIdentifier: Assembly-CSharp::BurgerIdle.Core.GameConfig
   startMoney: 100
+  levelTable: {fileID: 11400000, guid: 9d77dd2ae73273a41b8e947c3fc8b160, type: 2}
+  upgrades:
+  - {fileID: 11400000, guid: 666d939f78f2e7941977a03dd17a2f62, type: 2}
+  - {fileID: 11400000, guid: 645a6700f7dc7d84bb0ad6485f56c6a5, type: 2}
+  - {fileID: 11400000, guid: a95a5629150b53a478222b10121c0503, type: 2}
+  - {fileID: 11400000, guid: 2154a6590b13c6547a8340179a1e457e, type: 2}
+  - {fileID: 11400000, guid: 734d27b4eb5dbfd4198f26bda27101ae, type: 2}
+  - {fileID: 11400000, guid: 3d56b629c66ff174bb0138453649c2bb, type: 2}
+  - {fileID: 11400000, guid: 856d9c20b3a709242b6d16bc59a31ecd, type: 2}
+  - {fileID: 11400000, guid: 8cb5a35f1dc56f4488b2d655080afe98, type: 2}
+  - {fileID: 11400000, guid: 650d50b39848d504686d1f6f0b97a150, type: 2}
+  - {fileID: 11400000, guid: ef5b29eb0d7343248a5089bea10c9406, type: 2}
+  adDuration: 2
+  adCooldown: 30
   playerMoveSpeed: 5
   playerMaxCarry: 4
   playerTurnSpeed: 720
+  incomeMultiplierRange: {x: 1, y: 10}
   pickupInterval: 0.1
+  burgerPrice: 10
+  sellExp: 5
+  playerSellInterval: 0.1
+  workerSellInterval: 1
+  burgersPerPack: 4
+  packedPriceMultiplier: 1.5
+  playerPackInterval: 0.5
+  workerPackInterval: 2
+  packedBurgerPrefab: {fileID: 2561216338641753344, guid: a83ac2f88e255d24c88da36bbb7c8cdb, type: 3}
+  workerMoveSpeed: 2
+  workerMaxCarry: 2
+  workerCountRange: {x: 0, y: 6}
+  workerActionSpeedMax: 5
+  machineProducePerSecond: 0.5
+  machineMaxStock: 8
+  tableEatPerItem: 2
+  tipAmount: 3
+  tableMustCleanCount: 2
+  moneyCollectInterval: 0.05
   unlockStillTime: 0.5
   unlockPayDuration: 1.5
   moneyPrefab: {fileID: -3307413741003403289, guid: ccab83b8de3673b49a63016073dd64a4, type: 3}
+  trashPrefab: {fileID: -8843926671988423522, guid: 809e9fd5ee43783449e24395eecad793, type: 3}
   cameraPitch: 50
   cameraYaw: 45
   cameraDistance: 22
   cameraFieldOfView: 40
   cameraFollowSharpness: 8
   joystickRadius: 140
+  joystickHideWhenIdle: 1
   joystickRestHeight: 380

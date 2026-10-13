@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 05fb28cb21ff7a74883643d8158371f8, type: 3}
   m_Name: Unlock_Table
   m_EditorClassIdentifier: Assembly-CSharp::BurgerIdle.Unlock.UnlockDefinition
-  id: 003
+  id: 401
   displayName: "\uD14C\uC774\uBE14"
-  cost: 30
+  cost: 20
   requiredPlayerLevel: 0

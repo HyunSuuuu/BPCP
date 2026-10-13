@@ -1,29 +1,25 @@
 using System;
 using R3;
+using UnityEngine;
 
 namespace BurgerIdle.Player
 {
     /// <summary>
-    /// 플레이어 스탯. 업그레이드(P8)가 값을 바꾸면 구독자가 자동 반영한다.
+    /// 플레이어 스탯. 업그레이드 스탯(UpgradeManager.Stat)을 그대로 받아, 업그레이드하면 구독자가 자동 반영한다.
     /// </summary>
     public sealed class PlayerStats : IDisposable
     {
-        readonly ReactiveProperty<float> moveSpeed;
-        readonly ReactiveProperty<int> maxCarry;
+        readonly ReadOnlyReactiveProperty<int> maxCarry;
 
-        public ReadOnlyReactiveProperty<float> MoveSpeed => moveSpeed;
+        public ReadOnlyReactiveProperty<float> MoveSpeed { get; }
         public ReadOnlyReactiveProperty<int> MaxCarry => maxCarry;
 
-        public PlayerStats(float moveSpeed, int maxCarry)
+        public PlayerStats(ReadOnlyReactiveProperty<float> moveSpeed, ReadOnlyReactiveProperty<float> maxCarry)
         {
-            this.moveSpeed = new ReactiveProperty<float>(moveSpeed);
-            this.maxCarry = new ReactiveProperty<int>(maxCarry);
+            MoveSpeed = moveSpeed;
+            this.maxCarry = maxCarry.Select(Mathf.RoundToInt).ToReadOnlyReactiveProperty();
         }
 
-        public void Dispose()
-        {
-            moveSpeed.Dispose();
-            maxCarry.Dispose();
-        }
+        public void Dispose() => maxCarry.Dispose();
     }
 }

@@ -31,6 +31,10 @@ namespace BurgerIdle.Economy
 
         public ReadOnlyReactiveProperty<int> Get(CurrencyType type) => Property(type);
 
+        /// <summary>수익 배율을 곱해 반올림한다 (0.5는 올림). 예: 3 × 1.5 = 4.5 → 5</summary>
+        public static int ApplyMultiplier(int amount, float multiplier) =>
+            (int)Math.Round(amount * (double)multiplier, MidpointRounding.AwayFromZero);
+
         public void Add(CurrencyType type, int amount)
         {
             if (!IsValidAmount(amount))

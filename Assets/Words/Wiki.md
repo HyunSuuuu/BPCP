@@ -53,9 +53,9 @@ void Awake() => count.AddTo(this);
 
 | 에셋 | 생성 메뉴 | 내용 |
 | --- | --- | --- |
-| `GameConfig` | `Create > BurgerIdle > Game Config` | 시작 돈, 플레이어 스탯, 판매가·경험치·판매 간격, 기계 생산량, 해금 시간, 카메라, 조이스틱, 돈 프리팹 |
+| `GameConfig` | `Create > BurgerIdle > Game Config` | 시작 돈, 플레이어 스탯, 판매가·경험치·판매 간격, 포장(버거 수·포장 배율·포장 간격·포장 버거 프리팹), 알바 인원·행동 속도 상한, 기계 생산량, 해금 시간, 카메라, 조이스틱, 돈 프리팹 |
 | `CustomerConfig` | `Create > BurgerIdle > Customer Config` | 손님 이동속도, 입장 간격, 줄 간격, 최대 줄 길이 |
-| `UnlockDefinition` | `Create > BurgerIdle > Unlock Definition` | 해금 항목 id, 이름, 비용, 필요 레벨 |
+| `UnlockDefinition` | `Create > BurgerIdle > Unlock Definition` | 해금 항목 id, 이름, 비용, 필요 레벨, Grant Level, Unlock Message(해금 시 알림) |
 
 `GameBootstrap`에 `GameConfig`를 연결하지 않으면 코드의 기본값 인스턴스를 만들어 쓴다.
 
@@ -144,11 +144,25 @@ stateDiagram-v2
     [*] --> Entering: Area 입구 바깥 점에서 생성
     Entering --> Queueing: 입구 안쪽 점 → 줄 끝(경로 마지막 점) 도착
     Queueing --> AtCounter: 맨 앞 자리 도착
-    AtCounter --> Leaving: 버거 수령 (Counter.Sell → QueueMember.Serve)
+    AtCounter --> AtCounter: 좌석 예약 실패 → 판매 안 됨, 대기
+    AtCounter --> Served: 좌석 예약 성공 + 주문 수량만큼 수령 (Counter.Sell → QueueMember.Serve, 1개씩)
+    Served --> Leaving: (손님) 좌석으로 이동 → 음식을 테이블 가운데에 놓음 → 공유 식사 종료 시 함께 퇴장
     Leaving --> [*]: 출구 안쪽 점 → 바깥 점 도착 → 풀 반납
 ```
 
-이 흐름은 `QueueMember`가 처리하고 손님(`Customer`)과 드라이브스루 차량(P11)이 공유한다. 테이블 식사(P7)는 `Customer`가 `OnServed`를 재정의해 추가한다. 진상 손님(P13)은 아직 없다.
+이 흐름은 `QueueMember`가 처리하고 손님(`Customer`)과 드라이브스루 차량(P11)이 공유한다. 손님은 `TryPrepareForService`(좌석 예약), `OnServed`·`UpdateServed`(테이블 이동·식사)를 재정의한다. 차량은 재정의 없이 받자마자 퇴장한다. 진상 손님(P13)은 아직 없다.
+
+### 5.3 테이블 상태 (GDD 6.9)
+
+| 이벤트 | 처리 |
+| --- | --- |
+| 좌석 예약 | 예약·착석 손님이 없는 좌석에 손님 지정, `SeatedSinceClean`+1 |
+| 착석 | 손님 음식을 가운데 `FoodPile`에 추가. 식사 중이 아니면 식사 시작 |
+| 식사 중 | `tableEatPerItem`(1.5초)마다 `FoodPile`에서 1개가 작아지며 사라짐. 더미가 비면 식사 종료 (식사 시간 = 버거 수 × 1.5초) |
+| 강제 청소 | `SeatedSinceClean` ≥ 2 (`GameConfig.tableMustCleanCount`)면 새 예약 불가 |
+| 식사 종료 | 먹은 버거 1개당 쓰레기 1개(가운데 `TrashPile`) → 앉은 손님마다 팁(× Tip Multiplier) → 앉은 손님 함께 퇴장 |
+| 쓰레기 픽업 | `TrashPile`의 `PickupSource`로 1개씩 집어 감 |
+| 초기화 | 예약·착석 손님 0명 && 쓰레기 0개 → `SeatedSinceClean` = 0 |
 
 ### 5.3 자동 상호작용 규칙
 
@@ -191,37 +205,41 @@ stateDiagram-v2
 | --- | --- | --- |
 | `PickupObject` | 집을 수 있는 물건. 음식·쓰레기 프리팹 루트에 붙임 | Kind(Burger / Coffee / Trash), Stack Height(스택 한 칸 높이). `Category` = Food 또는 Trash |
 | `InteractionZone` | 상호작용 범위 (XZ 거리 원). 선택 시 초록 원으로 표시 | Radius, Offset. `Contains(position)` |
-| `PickupPile` | 물건을 격자로 쌓아 보관. 한 층이 차면 위로 | Category, Capacity(0 = 무제한), Origin(첫 칸 위치, 노란 상자로 표시), Columns·Rows·Spacing. `Add`, `TryTakeTop`, `CanAdd`, `SetCapacity`, `Count` |
+| `PickupPile` | 물건을 격자로 쌓아 보관. 한 층이 차면 위로 | Category, Capacity(0 = 무제한), Accepted Kinds(비우면 Category 전체, 카운터·포장 테이블은 코드가 지정), Origin(첫 칸 위치, 노란 상자로 표시), Columns·Rows·Spacing. `Add`, `TryTakeTop`, `TryConsume`, `CanAdd`, `SetCapacity`, `SetAcceptedKinds`, `TopKind`, `Count` |
 | `PickupSource` | 범위 안 캐릭터가 Pile에서 집어 가게 함 | Pile(비우면 같은 오브젝트의 것) |
 | `PickupReceiver` | 범위 안 캐릭터가 Pile에 내려놓게 함 | Pile(비우면 같은 오브젝트의 것) |
 | `InteractionRegistry` | 활성화된 Source·Receiver 목록 (static) | `IPickupProvider`, `IPickupReceiver` 인터페이스 정의 |
-| `CarryStack` | 캐릭터 머리 위 스택. 이동하면 위쪽일수록 늦게 따라오며 흔들림 | Anchor(비우면 높이 2.1에 자동 생성), Sway 값. `Push`, `Pop`, `Peek`, `CanAccept`, `Count`, `Category` |
-| `PickupInteractor` | 주변 Source·Receiver와 자동 상호작용 | 플레이어·알바 공용 |
+| `CarryStack` | 캐릭터 머리 위 스택. 이동하면 위쪽일수록 늦게 따라오며 흔들림 | Anchor(비우면 높이 2.1에 자동 생성), Sway 값. `Push`, `Pop`, `Peek`, `FindFromTop`, `Take`(중간 물건 꺼내기), `CanAccept`, `Count`, `Category` |
+| `PickupInteractor` | 주변 Source·Receiver와 자동 상호작용. 내려놓기는 받는 곳이 받을 수 있는 것 중 가장 위에 있는 것부터 | 플레이어 전용 (알바는 `Worker`가 직접 처리) |
 
 ### 6.4 Station
 
 | 스크립트 | 역할 | 필요 구성 |
 | --- | --- | --- |
 | `Machine` | 일정 간격으로 음식 생산 → 출력 Pile에 쌓음. 재고 상한에서 멈춤 | 같은 오브젝트에 `PickupPile`. Product에 음식 프리팹. `ProducePerSecond`, `MaxStock` (P8 업그레이드 대상) |
-| `Counter` | 판매. 판매 시 돈 더미 +10, 경험치 +5, 버거가 손님 머리 위로 전달 | Stock(재고 Pile), Service Point(응대 위치 Zone), Queue, Money Pile |
+| `Counter` | 판매. 판매가·경험치는 종류별(`GameConfig.PriceOf/ExpOf`: 버거 10·5, 포장 버거 = 버거 × 4 × 1.5), 물건이 손님·차량 머리 위로 전달. 알바 간격 = 1초 ÷ 행동 속도. 드라이브스루 카운터도 이 컴포넌트 | Sell Kind(일반 Burger, 드라이브스루 Packed Burger → 재고 Pile이 이 종류만 받음), Stock, Service Point, Queue(드라이브스루는 차량 줄), Money Pile. `ISupplyTarget` |
+| `PackingTable` | 포장. 투입 칸 버거 4개 이상 + 출력 칸 여유 + 포장 위치에 사람 → 진행도가 차면 버거 4개 소모, 포장 버거 1개 출력. 자리 비우면 진행도 유지 | Input(버거, 상한 8), Output(포장 버거, 상한 4), Pack Point, Gauge Root·Gauge Fill(선택). 플레이어 0.5초, 알바 2초 ÷ 행동 속도. `ISupplyTarget`(버거) |
+| `SupplyTargets` | 물건을 채워 줘야 하는 곳 목록 (`ISupplyTarget`: Kind, Shortage, Receiver) | 카운터·드라이브스루(줄 남은 주문량 − 재고), 포장 테이블(출력 칸을 채우는 데 필요한 버거). 알바 운반 판단용 |
 | `TrashBin` | 쓰레기를 받아 풀에 반납. 용량·보상 없음 | 같은 오브젝트에 `InteractionZone` |
+| `Table` | 2인 합석 테이블. 좌석 예약, 가운데 공유 음식으로 함께 식사, 쓰레기·팁, 강제 청소 (5.3) | Seats[2](Sit Point = 손님 위치·방향), Food Pile·Trash Pile(가운데, `PickupPile` 재사용), Tip Pile. `TryReserveNearest`, `SeatedSinceClean`, `TrashCount`, `IsMustClean` |
 
 ### 6.5 Money
 
 | 스크립트 | 역할 | 비고 |
 | --- | --- | --- |
 | `MoneyObject` | 돈 오브젝트. 생성 시점의 금액(`Amount`) 보관 | 돈 프리팹 루트에 붙이고 `GameConfig.moneyPrefab`에 연결 |
-| `MoneyPile` | 돈 더미. 가로 4 × 세로 2 격자, 차면 위층, 10층 초과분은 마지막 돈에 합산 | `InteractionZone` 필요. `Add(amount, from)`, `TryTakeTop`, `TotalAmount`. 선택 시 초록 사각형으로 영역 표시 |
+| `MoneyPile` | 돈 더미. 가로 4 × 세로 2 격자, 차면 위층, 10층 초과분은 마지막 돈에 합산. 쌓을 때 수익 배율 적용 | `InteractionZone` 필요. `Add(amount, from)`, `TryTakeTop`, `TotalAmount`. 선택 시 초록 사각형으로 영역 표시 |
 | `MoneyCollector` | 플레이어 전용 수거. 돈이 플레이어를 따라 날아오고 도착 시 소지금 추가 | Bootstrap이 플레이어에 자동 부착 |
 
 ### 6.6 Customers
 
 | 스크립트 | 역할 | 비고 |
 | --- | --- | --- |
-| `QueueMember` | 줄 서는 대상의 공통 동작 (추상 클래스, 5.2 상태). 입구 → 줄 → 수령 → 출구 | `Begin(queue, 입구 안쪽 점, 출구 경로)`, `Serve(food)`, `State`. 수령 후 행동은 `OnServed` 재정의. Item Anchor(비우면 높이 2.1) |
-| `Customer` | 매장 손님 (`QueueMember` 상속) | 프리팹 루트는 **발 위치(Y 0)**. P7에서 테이블 이동 추가 |
+| `QueueMember` | 줄 서는 대상의 공통 동작 (추상 클래스, 5.2 상태). 입구 → 줄 → 주문 수량만큼 수령 → 출구 | `Begin(queue, 입구 안쪽 점, 출구 경로)`, `Serve(food)`(1개씩, 머리 위에 쌓음), `State`, `OrderCount`, `ReceivedCount`. 재정의: `RollOrderCount`, `TryPrepareForService`, `OnServed`, `UpdateServed`. Item Anchor(비우면 높이 2.1) |
+| `Customer` | 매장 손님 (`QueueMember` 상속). 좌석 예약 → 주문 수령 → 좌석으로 직선 이동 → 테이블 공유 식사 → 함께 퇴장 | 프리팹 루트는 **발 위치(Y 0)**. Order Range(일반 1~4, VIP 6~10), Tip Multiplier(일반 1, VIP 3). 일반·VIP는 같은 컴포넌트, 프리팹만 다름 |
+| `Vehicle` | 드라이브스루 차량 (`QueueMember` 상속, 기본 동작). 포장 버거 1개 받으면 바로 차량 출구로 퇴장 | 프리팹 루트 발 위치(Y 0). Item Anchor로 받은 봉투 위치 지정(창문 쪽). 스포너는 `CustomerSpawner` 재사용(Vehicle Entrance / Vehicle Exit) |
 | `CustomerQueue` | 경로 점을 따라 슬롯 자동 계산. 앞이 비면 경로 따라 전진. 차량 줄에도 재사용 | Path: P0 = 카운터 앞(맨 앞), 마지막 = 줄 끝(입구 쪽). 꺾인 줄 가능. 노란 선·원으로 표시 |
-| `CustomerSpawner` | Area 입구에서 입장 간격마다 생성. 줄이 차면 멈춤 | Prefab(`QueueMember`), Queue, **Area**, Entrance Type·Exit Type(기본 사람 입구·출구, 차량은 차량 입구·출구), **Open Zone**(이 구역 완료 후 시작, 비우면 즉시) |
+| `CustomerSpawner` | Area 입구에서 입장 간격마다 생성. 줄이 차면 멈춤 | Prefab(`QueueMember`), **Variants**(프리팹 + 가중치, 예: 일반 9 : VIP 1), Queue, **Area**, Entrance Type·Exit Type(기본 사람 입구·출구, 차량은 차량 입구·출구), **Open Zone**(이 구역 완료 후 시작, 비우면 즉시) |
 | `CustomerConfig` | 손님(또는 차량) 수치 | 2.4 참조. 차량은 별도 에셋 |
 
 ### 6.6.1 Areas · 공용 이동
@@ -236,9 +254,10 @@ stateDiagram-v2
 
 | 스크립트 | 역할 | 비고 |
 | --- | --- | --- |
-| `UnlockDefinition` | 해금 데이터 (id, 이름, 비용, 필요 레벨) | 씬 오브젝트는 참조할 수 없어서 해금 대상은 박스에서 연결 |
+| `UnlockDefinition` | 해금 데이터 (id, 이름, 비용, 필요 레벨, Grant Level = 해금 시 이 레벨까지 올림) | 씬 오브젝트는 참조할 수 없어서 해금 대상은 박스에서 연결 |
 | `UnlockBox` | 해금 박스. 0.5초 정지 후 투입, 부분 지불·재개, 완료 시 박스 사라지고 대상이 튀어나옴 | `InteractionZone` 필요. Target은 **박스의 자식이면 안 됨**(같이 사라짐). 시작 시 Target 자동 숨김. `Paid`, `IsUnlocked` |
-| `UnlockZone` | 박스 묶음. 모두 해금되면 `IsCompleted` = true | Boxes 비우면 자식 박스 자동 수집. Zone0 완료 = 손님 입장 시작 |
+| `Zone` | 구역 하나. Floor·RemoveOnExpand·Expansion·Facilities 연결 (비우면 같은 이름 자식 자동 탐색) | Expansion 없으면 시작 공간. 칸마다 연결 대상 툴팁. 확장 박스에 Target이 있으면 경고 |
+| `ZoneManager` | 구역을 순서대로 엶. 이전 Zone 시설 완료 → 확장 박스 → Floor 솟아오름/RemoveOnExpand 내려감 → 시설 박스. 시설 없는 Zone은 열리자마자 다음 확장 박스 | `Zones` 오브젝트에 부착. 자식 `Zone`을 Hierarchy 순서대로 사용. Move Distance. GameBootstrap이 NavMesh 굽기 전에 Init | Boxes 비우면 자식 박스 자동 수집. Zone0 완료 = 손님 입장 시작 |
 
 `UnlockBox`의 비주얼은 바닥에 눕힌 World Space Canvas다.
 
@@ -254,23 +273,97 @@ stateDiagram-v2
 | 스크립트 | 역할 | 비고 |
 | --- | --- | --- |
 | `CurrencyManager` | 돈·경험치 단일 진입점 (일반 C# 클래스) | `Add(type, amount)`, `TrySpend(type, amount)`(전액 가능할 때만), `SpendUpTo(max)`(가진 만큼 차감, 실제 금액 반환), `Money`, `Exp` |
-| `Hud` | 돈·경험치 표시. 바뀌면 카운트업 트윈 + 증가 시 살짝 튐 | HUD Canvas 루트에 부착. Money Text, Exp Text |
+| `LevelTable` | 경험치 → 레벨 곡선 (ScriptableObject) | Lv N → N+1 = round(Base Exp × Growth^(N-1)). Start Level(기본 0). `GameConfig.levelTable` (비우면 기본값 50, ×1.5, 최대 20) |
+| `PlayerLevel` | 누적 경험치로 레벨·진행도 계산 (일반 C# 클래스) | `Level`, `ExpInLevel`, `ExpToNext`, `Progress`(0~1). 레벨 = max(경험치 레벨, `RaiseTo`로 받은 레벨), 받은 레벨이 0이면 경험치와 관계없이 0. 업그레이드·해금 박스·HUD가 구독 |
+| `Hud` | HUD 진입점. 자식의 화면 요소를 찾아 초기화하고, 레벨업 시 알림을 띄움 | HUD Canvas 루트에 부착. 인스펙터 칸 없음. `Notifications`로 다른 시스템이 알림 사용 |
+| `MoneyView` | 소지금 표시 | 돈 묶음 프리팹 루트. Money Text(`CountUpText`) |
+| `LevelView` | "Lv N", 경험치 바, "현재 / 필요량"(최대 레벨이면 MAX), 레벨업 시 숫자 튐 | 레벨 묶음 프리팹 루트. Level Text, Exp Bar(Filled), Exp Text |
+| `NotificationPopup` | 범용 알림 팝업. 연달아 오면 차례로 표시 | 알림 프리팹 루트(CanvasGroup 필요). Message Text, Hold Duration. `Show(message)` |
+| `CountUpText` | 숫자 카운트업 + 증가 시 튐 (공용) | 숫자 TMP 텍스트에 부착. Format(`{0:N0}`), Duration, Punch Scale |
 | `VirtualJoystick` | 플로팅 조이스틱. 터치한 곳에 나타남. On-Screen Control로 가상 게임패드 스틱에 값 전달 | Bootstrap이 코드로 생성. Canvas Sort Order -100 |
 | `UiSprites` | 런타임 원형 스프라이트 생성 | 조이스틱용 |
+| `OrderBubble` | 줄 맨 앞 손님의 주문 말풍선 "받은 수/주문 수". 카메라를 향함 | 손님 프리팹 안 World Space Canvas에 부착. Root, Count Text. VIP는 프리팹에서 색 변경 |
+
+### 6.10 Workers (네임스페이스 BurgerIdle.Workers)
+
+| 스크립트 | 역할 | 비고 |
+| --- | --- | --- |
+| `Worker` | 알바. 일 고르기 → NavMesh 이동 → 작업 → 다음 일. 동적 우선순위: 들고 있는 것 처리 > 막힌 좌석·강제 청소 > 판매(`Counter.NeedsSeller`, 일반·드라이브스루) > 포장(`PackingTable.NeedsPacker`) > 운반(모자란 `ISupplyTarget` → 그 종류를 내주는 가까운 곳, 많이 모자란 곳 우대) > 일반 청소, 같으면 가까운 순 | 프리팹 루트에 `NavMeshAgent` + `CarryStack` + `Worker`. 지나가며 자동 줍기 없음. 할 일 없으면 제자리 대기 |
+| `TaskBoard` | 작업 대상 예약 (static) | 한 대상은 알바 한 명만 |
+| `WorkerManager` | 인원수 스탯이 오르면 직원 대기 지점에서 알바 생성 | Prefab, Spawn Point |
+
+가로채기: 이동 중 대상이 비거나(플레이어가 가져감), 플레이어가 응대 위치에 들어오면 일을 포기하고 예약을 푼 뒤 다음 일을 고른다. `Counter`는 플레이어가 응대 위치에 있으면 플레이어 간격, 없으면 도착한 알바의 간격(1초 ÷ `WorkerActionSpeed`)으로 판다. `PackingTable`도 같은 방식(플레이어 0.5초, 알바 2초 ÷ 행동 속도). NavMesh는 `GameBootstrap.SetupNavMesh`가 시작 시·해금 후 다시 굽는다.
+
+### 6.9 Upgrade
+
+| 스크립트 | 역할 | 비고 |
+| --- | --- | --- |
+| `UpgradeDefinition` | 업그레이드 항목 (ScriptableObject) | Category(Player·Machine·Table·Worker), Stat(StatKey), 필요 레벨, 최대 레벨, Base Cost·Cost Growth, Value Per Level(줄일 스탯은 음수), Value Format. 알바 Stat: WorkerCount(0~6), WorkerMoveSpeed, WorkerMaxCarry, WorkerActionSpeed(판매·포장 속도 배율 1~5배) |
+| `UpgradeManager` | 업그레이드 레벨·스탯 값 관리 (일반 C# 클래스). 광고 업그레이드(`TryUpgradeByAd`, 항목별 재사용 대기) 포함 | `Stat(key)` = GameConfig 기본값 + Σ 레벨 × 변화량 (스탯별 최소·최대 범위로 제한, 범위 끝이면 MAX). `TryPurchase`(레벨·돈 확인 후 구매), `LevelOf`, `IsLocked`, `IsMaxed`, `CurrentCost` |
+| `UpgradePad` | 바닥 패드. 들어가면 패널 열림, 벗어나면 닫힘 | `InteractionZone` 필요. Title(패널 제목), Categories(비우면 전체) |
+| `UpgradePanel` | 업그레이드 패널. 열릴 때 카드 생성 | HUD Canvas 안. Window(자식), Canvas Group, Content(Horizontal Layout Group), Title Text, Close Button, Entry Prefab |
+| `UpgradeEntryView` | 업그레이드 카드 한 장 | 카드 프리팹 루트. Name Text, Icon Image(데이터의 Icon), Pip Container + Pip Prefab(최대 레벨 수만큼 칸 생성, 산 만큼 채움), Ad Button + Ad Text(무료·광고 중·대기 초), Money Button + Cost Text, 선택: Value·Lock Text |
+
+스탯을 쓰는 쪽: `PlayerStats`(이동속도·적재량), `MoneyPile`(수익 배율, `CurrencyManager.ApplyMultiplier`로 반올림), `Machine`(생산량·최대 재고, 매 프레임 현재 값 읽음), `Table`(버거 1개 먹는 시간). 새 스탯을 추가하려면 `StatKey`에 항목을 넣고 `GameBootstrap.CreateUpgrades`에 기본값을 등록한다.
 
 ---
 
 ## 7. 조립 레시피
+
+### 7.0 Hierarchy 구조
+
+```
+[Systems]                  ← Bootstrap(GameBootstrap), WorkerManager 등 로직
+[UI]                       ← Canvas (HUD, UpgradePanel, NotificationPopup)
+Area                       ← Area + NavMeshSurface (위치·회전 0, 크기 1)
+├─ Gates                   ← 출입문
+├─ Routes                  ← 손님 줄·차량 줄 + 경로 점
+├─ Spawners                ← 손님·차량 스포너
+├─ StaffPoint              ← 직원 대기 지점
+└─ Zones                   ← ZoneManager
+   ├─ ZoneStart            ← Zone (시작 공간: Expansion 없음, 매장 밖)
+   │  └─ Floor             ← 바깥 바닥 (GameBootstrap Ground)
+   ├─ Zone0                ← Zone (매장)
+   │  ├─ Floor             ← 매장 바닥·벽·쓰레기통 (확장 시 솟아오름)
+   │  ├─ Expansion         ← 매장을 여는 UnlockBox (Target 비움, 매장 입구에 배치)
+   │  ├─ Facilities        ← UnlockZone + 해금 박스들 (TableSet 등)
+   │  └─ Objects           ← 시설 본체 (해금 박스의 Target), 손님 줄
+   ├─ Zone1                ← Zone (업그레이드 공간)
+   │  ├─ Floor             ← 확장 시 솟아오름
+   │  ├─ Expansion         ← Zone1을 여는 UnlockBox (Zone0 바닥 위에 놓여도 Hierarchy는 Zone1 아래)
+   │  ├─ Facilities        ← 업그레이드 패드 세트들
+   │  └─ Objects
+   └─ Zone2                ← Zone (드라이브스루, 마지막)
+Player / Main Camera / Directional Light
+```
+
+- 그룹 오브젝트(Area, Zones, ZoneN, Floor, Objects 등)는 위치·회전 0, 크기 1로 둔다. Zone 루트는 위치를 옮겨도 된다(자식이 그 기준으로 배치됨).
+- 새 Zone은 직전 Zone을 복제해 내용을 바꾸고, ZoneManager는 Hierarchy 순서대로 연다.
+- **확장 박스는 "그 Zone을 여는 박스"다.** 이전 Zone 아래에 두거나 Target에 다음 Zone을 넣지 않는다 (Target이 있으면 경고).
+- **칸막이 벽:** 이전 Zone Floor 안의 경계 벽을 다음 Zone의 `Remove On Expand` 칸에 직접 연결한다.
+- Facilities가 없는(해금 박스 0개) Zone은 열리자마자 다음 확장 박스가 나타난다. 시작 공간이면 처음부터 나타난다.
+- Objects 안의 오브젝트는 해금 박스의 Target이어야 해금 전에 숨겨진다. 쓰레기통처럼 Zone과 함께 나타날 것은 Floor에 넣는다.
+- **세트 프리팹:** 해금 박스와 시설을 빈 루트 아래 형제로 둔다 (`TableSet` = UnlockBox_Table + Table, Target = 옆의 Table). 시설을 박스의 자식으로 두면 해금 후 박스와 함께 꺼진다. 세트는 Facilities 아래에 둔다.
+- 손님 스포너는 Facilities 밖에 둔다 (Facilities 안에 있으면 확장 전에 꺼져 있음). Open Zone을 비우면 스포너가 속한 Zone의 Facilities를 쓴다.
+- **NavMesh:** NavMeshSurface(Collect Objects All, Render Meshes)는 씬의 모든 메시를 굽는다. 움직이는 오브젝트(손님, 픽업 물건, 돈, 플레이어)는 `NavMeshIgnore`가 `NavMeshModifier`(Ignore From Build)를 붙여 제외한다. 알바는 NavMeshAgent라 자동 제외. 새로 움직이는 오브젝트 종류를 만들면 Awake에서 `NavMeshIgnore.Mark(gameObject)`를 부른다.
 
 컴포넌트는 **스케일 1인 빈 오브젝트**에 붙이고, 모양용 도형은 자식으로 둔다. 스케일이 1이 아니면 쌓인 물건까지 같이 커지거나 줄어든다.
 
 | 오브젝트 | 컴포넌트 조합 | 설정 |
 | --- | --- | --- |
 | 버거 기계 | `PickupPile` + `InteractionZone` + `PickupSource` + `Machine` | Pile Category Food, Machine Product = 버거 프리팹 |
-| 카운터 | `PickupPile` + `InteractionZone` + `PickupReceiver` + `Counter` | Pile Category Food. 자식으로 ServicePoint(`InteractionZone`), MoneyPile(`InteractionZone` + `MoneyPile`) |
+| 카운터 | `PickupPile` + `InteractionZone` + `PickupReceiver` + `Counter` | Pile Category Food, Sell Kind Burger. 자식으로 ServicePoint(`InteractionZone`), MoneyPile(`InteractionZone` + `MoneyPile`) |
+| 드라이브스루 카운터 | 카운터와 같음 | Sell Kind **Packed Burger**, Queue = 차량 줄. ServicePoint는 창구(직원이 서는 매장 안쪽) |
+| 포장 테이블 | 루트 `PackingTable` + 자식 Input(`PickupPile` Food + `InteractionZone` + `PickupReceiver`), Output(`PickupPile` Food + `InteractionZone` + `PickupSource`), PackPoint(`InteractionZone`), Gauge(World Space Canvas + Filled Image, 선택) | 받는 종류·상한은 코드가 설정. Input·Output·PackPoint의 범위가 겹치지 않게 |
+| 포장 버거 | 루트(스케일 1) `PickupObject`(Kind Packed Burger, Stack Height ≈ 봉투 높이) + 자식 모양 | `GameConfig.Packed Burger Prefab`에 연결 |
+| 차량 | 루트(스케일 1, 발 위치 Y 0) `Vehicle` + 자식 모양 | 차량용 `CustomerConfig`(속도 4, 간격 3.0, 최대 4대, 입장 6초)를 차량 줄에 |
 | 쓰레기통 | `InteractionZone` + `TrashBin` | — |
+| 테이블 | `Table` + 자식 Sit Point 2개 + 가운데 FoodPile(`PickupPile` Food, Capacity 0) + 가운데 TrashPile(`PickupPile` Trash, Capacity 0 + `InteractionZone` + `PickupSource`) + 옆에 MoneyPile(팁 더미) | Sit Point의 정면(파란 화살표)이 테이블을 향하게. 두 Pile은 테이블 윗면, Columns·Rows 2 |
 | 해금 박스 | `InteractionZone` + `UnlockBox` + 자식 World Space Canvas | 루트 Rotation Y 45(카메라 방향), Canvas Rotation X 90, Scale 0.01, **Graphic Raycaster 제거** |
 | 해금 구역 | `UnlockZone` + 자식 해금 박스들 | — |
+| 업그레이드 패드 | `InteractionZone` + `UpgradePad` + 바닥 표시 | Categories로 보여 줄 종류 지정 |
+| 업그레이드 패널 | HUD Canvas 안 `UpgradePanel` 오브젝트 + 자식 Window(Canvas Group, Content) | Window는 패널 오브젝트의 자식. 버튼만 Raycast Target 켜기 |
+| 업그레이드 항목 프리팹 | 루트 `UpgradeEntryView` + TMP 텍스트들 + Button | Panel의 Entry Prefab에 연결 |
 | 손님 줄 | `CustomerQueue` + 자식 경로 점 | Config 연결 |
 | 손님 프리팹 | 루트(발 위치) `Customer` + 자식 모양 | — |
 | 매장 영역 | `Area` + 자식 출입문들 | — |
@@ -320,6 +413,7 @@ ObjectPools.Release(component);     // 그 외 컴포넌트
 | N | 돈 30 지불 (`TrySpend`, 부족하면 실패) |
 | B | 돈 최대 30 지불 (`SpendUpTo`, 가진 만큼) |
 | E | 경험치 +5 |
+| T | 게임 속도 1배 ↔ 3배 |
 
 ### 9.2 자주 나는 설정 실수
 
@@ -345,11 +439,11 @@ ObjectPools.Release(component);     // 그 외 컴포넌트
 | P6 | Area·출입문 (사람·차량 입구·출구), 손님 스포너를 출입문 기반으로 전환 |
 | P7 | 테이블 2인 합석, 빈 좌석 예약 후 판매, 식사·팁 더미, 쓰레기 축적, 강제 청소 |
 | P8 | 레벨업(`LevelTable`), 업그레이드 데이터·패널, 해금 박스 레벨 검사 |
-| P9 | 알바 AI(`TaskBoard`), 플레이어 가로채기, 알바 판매 간격 1초 → 업그레이드로 감소 |
-| P10 | `ZoneManager`, Zone 1 (매장 확장 + 테이블 추가) |
-| P11 | Zone 2 드라이브스루: 받는 종류 필터, 포장 테이블, 포장 버거, 차량 손님 |
-| P12 | Zone 3 배달: 배달원, 말풍선, 제한 시간, 즉시 입금 |
-| P13 | 진상 손님, Zone 4 커피 매장(미정), 연출 정리, 종료 화면 |
+| P9 | 알바 AI(`TaskBoard`), 플레이어 가로채기, 알바 판매 간격 1초 → 업그레이드로 감소 (P11에서 행동 속도로 변경) |
+| P10 | `ZoneManager`, ZoneStart(매장 밖) → Zone 0(매장 구매) → Zone 1(플레이어·알바 업그레이드 패드) |
+| P11 | Zone 2 드라이브스루 (마지막 Zone): 받는 종류 필터, 포장 테이블, 포장 버거, 차량 손님 |
+| ~~P12~~ | ~~Zone 3 배달~~ → 제외 (2026-10-13 범위 축소) |
+| P13 | 진상 손님, 연출 정리, 종료 화면 |
 | P14 | 저장/불러오기, 오프라인 보상 |
 
 미정 사항 전체 목록은 [GDD.md](GDD.md) 14장을 본다. 주요 항목:

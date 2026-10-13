@@ -14,6 +14,7 @@ namespace BurgerIdle.Pickup
         public InteractionZone Zone { get; private set; }
         public PickupCategory Category => pile.Category;
         public bool HasItem => pile.Count.CurrentValue > 0;
+        public bool HasKind(PickupKind kind) => pile.TopKind == kind;
 
         void Awake()
         {

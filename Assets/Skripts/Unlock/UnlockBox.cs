@@ -19,6 +19,8 @@ namespace BurgerIdle.Unlock
     {
         const float CoinInterval = 0.08f;
 
+        [Header("Data")]
+        [Tooltip("비용·필요 레벨")]
         [SerializeField] UnlockDefinition definition;
         [Tooltip("해금되면 나타날 씬 오브젝트. 게임 시작 시 자동으로 숨긴다. 이 박스의 자식이면 안 된다.")]
         [SerializeField] GameObject target;
@@ -31,7 +33,7 @@ namespace BurgerIdle.Unlock
         [Tooltip("비용 표시 묶음 (비용 텍스트 + 돈 아이콘)")]
         [SerializeField] GameObject costGroup;
         [SerializeField] TMP_Text costText;
-        [Tooltip("레벨 잠금 표시 묶음 (자물쇠 + 레벨 텍스트 + 별). 레벨 검사는 P8에서 연결")]
+        [Tooltip("레벨 잠금 표시 묶음 (자물쇠 + 레벨 텍스트 + 별). 필요 레벨 미달일 때 표시")]
         [SerializeField] GameObject lockedGroup;
         [SerializeField] TMP_Text levelText;
 
@@ -42,6 +44,8 @@ namespace BurgerIdle.Unlock
         CurrencyManager currency;
         PlayerController player;
         GameConfig config;
+        PlayerLevel playerLevel;
+        bool isLocked;
         Vector3 visualScale;
         Vector3 targetScale;
         float stillTime;
@@ -49,6 +53,7 @@ namespace BurgerIdle.Unlock
         float coinTimer;
 
         public UnlockDefinition Definition => definition;
+        public GameObject Target => target;
         public ReadOnlyReactiveProperty<int> Paid => paid;
         public ReadOnlyReactiveProperty<bool> IsUnlocked => isUnlocked;
         public int Remaining => definition.cost - paid.Value;
@@ -62,11 +67,12 @@ namespace BurgerIdle.Unlock
                 visualScale = visualRoot.localScale;
         }
 
-        public void Init(CurrencyManager currency, PlayerController player, GameConfig config)
+        public void Init(CurrencyManager currency, PlayerController player, GameConfig config, PlayerLevel playerLevel)
         {
             this.currency = currency;
             this.player = player;
             this.config = config;
+            this.playerLevel = playerLevel;
 
             if (definition == null)
             {
@@ -82,15 +88,18 @@ namespace BurgerIdle.Unlock
             }
 
             if (levelText != null)
-                levelText.text = $"Lv {definition.requiredPlayerLevel}";
-            SetLocked(false);
+                levelText.text = definition.requiredPlayerLevel.ToString();
 
+            playerLevel.Level
+                .Subscribe(level => SetLocked(level < definition.requiredPlayerLevel))
+                .AddTo(this);
             paid.Subscribe(_ => UpdateVisual()).AddTo(this);
         }
 
-        /// <summary>레벨 잠금 표시 전환. 레벨 검사는 P8에서 연결한다.</summary>
+        /// <summary>필요 레벨 미달이면 잠금 표시를 띄우고 돈을 받지 않는다.</summary>
         void SetLocked(bool locked)
         {
+            isLocked = locked;
             if (costGroup != null)
                 costGroup.SetActive(!locked);
             if (lockedGroup != null)
@@ -105,8 +114,8 @@ namespace BurgerIdle.Unlock
             var dt = Time.deltaTime;
             coinTimer -= dt;
 
-            // 범위 밖이거나 움직이면 정지 시간을 처음부터 다시 잰다
-            if (!zone.Contains(player.transform.position) || player.IsMoving.CurrentValue)
+            // 잠겨 있거나, 범위 밖이거나, 움직이면 정지 시간을 처음부터 다시 잰다
+            if (isLocked || !zone.Contains(player.transform.position) || player.IsMoving.CurrentValue)
             {
                 stillTime = 0f;
                 payBudget = 0f;
@@ -166,6 +175,8 @@ namespace BurgerIdle.Unlock
         void Complete()
         {
             isUnlocked.Value = true;
+            if (definition.grantLevel > 0)
+                playerLevel.RaiseTo(definition.grantLevel);
 
             transform.DOKill();
             transform.DOScale(0f, 0.2f)

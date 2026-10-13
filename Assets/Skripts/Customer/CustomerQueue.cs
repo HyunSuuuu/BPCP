@@ -10,8 +10,12 @@ namespace BurgerIdle.Customers
     /// </summary>
     public sealed class CustomerQueue : MonoBehaviour
     {
+        [Header("Path")]
         [Tooltip("줄 경로. 첫 점 = 맨 앞 위치(카운터 앞), 마지막 점 = 줄 끝(입구 쪽). 꺾인 줄 가능")]
         [SerializeField] Transform[] path;
+
+        [Header("Data")]
+        [Tooltip("줄 간격·최대 인원·이동속도·입장 간격 (손님용과 차량용 에셋을 따로)")]
         [SerializeField] CustomerConfig config;
 
         readonly List<QueueMember> members = new List<QueueMember>();
@@ -19,6 +23,18 @@ namespace BurgerIdle.Customers
         public CustomerConfig Config => config;
         public bool IsFull => members.Count >= config.maxQueueLength;
         public QueueMember Front => members.Count > 0 ? members[0] : null;
+
+        /// <summary>줄 선 대상 전원의 남은 주문 수량 합 (알바가 운반이 필요한지 판단할 때 사용)</summary>
+        public int RemainingDemand
+        {
+            get
+            {
+                var total = 0;
+                foreach (var member in members)
+                    total += member.RemainingOrder;
+                return total;
+            }
+        }
 
         /// <summary>경로 전체 길이. 입장한 대상은 이 지점(줄 끝)에서 줄에 합류한다.</summary>
         public float PathLength

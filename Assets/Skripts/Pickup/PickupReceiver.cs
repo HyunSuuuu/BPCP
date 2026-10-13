@@ -12,6 +12,7 @@ namespace BurgerIdle.Pickup
         [SerializeField] PickupPile pile;
 
         public InteractionZone Zone { get; private set; }
+        public PickupPile Pile => pile != null ? pile : pile = GetComponent<PickupPile>();
 
         void Awake()
         {

@@ -1,15 +1,19 @@
 using R3;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.InputSystem;
 
 namespace BurgerIdle.Player
 {
     /// <summary>
     /// 조이스틱(가상 Gamepad 왼쪽 스틱) 또는 WASD 입력으로 XZ 평면을 이동한다. 이동 방향은 카메라 기준.
+    /// NavMeshAgent가 NavMesh 위에 있으면 NavMesh 안으로만 움직인다 (매장 확장에 따라 범위가 넓어지고,
+    /// 시설은 통과하지 않고 미끄러지듯 돌아간다). NavMesh가 없으면 바닥 사각형 안으로 제한한다.
     /// </summary>
     public sealed class PlayerController : MonoBehaviour
     {
         const float MoveThreshold = 0.01f;
+        const float NavMeshSearchRadius = 2f;
 
         readonly ReactiveProperty<bool> isMoving = new ReactiveProperty<bool>(false);
 
@@ -18,16 +22,27 @@ namespace BurgerIdle.Player
         Transform cameraTransform;
         Rect bounds;
         float turnSpeed;
+        NavMeshAgent agent;
 
         /// <summary>입력이 있는 동안 true. 해금 박스의 정지 판정에 쓴다.</summary>
         public ReadOnlyReactiveProperty<bool> IsMoving => isMoving;
 
-        public void Init(PlayerStats stats, Transform cameraTransform, Rect bounds, float turnSpeed)
+        /// <param name="agent">NavMesh 이동 제한용 (없으면 bounds 사각형으로 제한)</param>
+        public void Init(PlayerStats stats, Transform cameraTransform, Rect bounds, float turnSpeed, NavMeshAgent agent)
         {
             this.stats = stats;
             this.cameraTransform = cameraTransform;
             this.bounds = bounds;
             this.turnSpeed = turnSpeed;
+            this.agent = agent;
+
+            if (agent != null)
+            {
+                // 이동·회전은 이 스크립트가 직접 한다. 에이전트는 NavMesh 안으로 위치를 제한하는 용도
+                agent.updateRotation = false;
+                agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
+                TrySnapToNavMesh();
+            }
         }
 
         void Awake()
@@ -61,14 +76,34 @@ namespace BurgerIdle.Player
 
             var yaw = cameraTransform != null ? cameraTransform.eulerAngles.y : 0f;
             var direction = Quaternion.Euler(0f, yaw, 0f) * new Vector3(input.x, 0f, input.y);
+            var delta = direction * (stats.MoveSpeed.CurrentValue * Time.deltaTime);
 
-            var position = transform.position + direction * (stats.MoveSpeed.CurrentValue * Time.deltaTime);
-            position.x = Mathf.Clamp(position.x, bounds.xMin, bounds.xMax);
-            position.z = Mathf.Clamp(position.z, bounds.yMin, bounds.yMax);
-            transform.position = position;
+            if (agent != null && TrySnapToNavMesh())
+            {
+                // NavMesh 경계·장애물을 따라 미끄러지듯 이동
+                agent.Move(delta);
+            }
+            else
+            {
+                var position = transform.position + delta;
+                position.x = Mathf.Clamp(position.x, bounds.xMin, bounds.xMax);
+                position.z = Mathf.Clamp(position.z, bounds.yMin, bounds.yMax);
+                transform.position = position;
+            }
 
             var targetRotation = Quaternion.LookRotation(direction, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
+        }
+
+        /// <summary>NavMesh 위에 있거나 가까운 NavMesh로 옮길 수 있으면 true.</summary>
+        bool TrySnapToNavMesh()
+        {
+            if (!agent.isActiveAndEnabled)
+                return false;
+            if (agent.isOnNavMesh)
+                return true;
+            return NavMesh.SamplePosition(transform.position, out var hit, NavMeshSearchRadius, NavMesh.AllAreas)
+                   && agent.Warp(hit.position);
         }
     }
 }

@@ -10,6 +10,7 @@ namespace BurgerIdle.Station
     [RequireComponent(typeof(InteractionZone))]
     public sealed class TrashBin : MonoBehaviour, IPickupReceiver
     {
+        [Header("Tween")]
         [Tooltip("쓰레기가 날아가 들어가는 지점의 높이")]
         [SerializeField] float mouthHeight = 1f;
         [SerializeField] float jumpDuration = 0.25f;

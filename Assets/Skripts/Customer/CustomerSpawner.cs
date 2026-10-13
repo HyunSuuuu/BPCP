@@ -1,3 +1,4 @@
+using System;
 using BurgerIdle.Areas;
 using BurgerIdle.Core;
 using BurgerIdle.Unlock;
@@ -13,12 +14,31 @@ namespace BurgerIdle.Customers
     /// </summary>
     public sealed class CustomerSpawner : MonoBehaviour
     {
+        [Serializable]
+        public sealed class Variant
+        {
+            public QueueMember prefab;
+            [Tooltip("등장 가중치. 예: 일반 9, VIP 1 → VIP 10%")]
+            [Min(0f)] public float weight = 1f;
+        }
+
+        [Header("Spawn")]
+        [Tooltip("Variants가 비어 있을 때 사용하는 기본 프리팹")]
         [SerializeField] QueueMember prefab;
+        [Tooltip("가중치에 따라 무작위로 고르는 프리팹 목록 (일반·VIP 손님). 비우면 Prefab만 사용")]
+        [SerializeField] Variant[] variants;
+
+        [Header("Route")]
         [SerializeField] CustomerQueue queue;
         [SerializeField] Area area;
+        [Tooltip("손님은 People Entrance, 차량은 Vehicle Entrance")]
         [SerializeField] GateType entranceType = GateType.PeopleEntrance;
+        [Tooltip("손님은 People Exit, 차량은 Vehicle Exit")]
         [SerializeField] GateType exitType = GateType.PeopleExit;
-        [Tooltip("이 구역이 모두 해금되면 입장 시작. 비워 두면 바로 시작")]
+
+        [Header("Open Condition")]
+        [Tooltip("이 시설 묶음(UnlockZone)이 모두 해금되면 입장 시작. 보통 같은 Zone의 Facilities.\n" +
+                 "비워 두면 이 스포너가 속한 Zone의 Facilities, 그것도 없으면 바로 시작")]
         [SerializeField] UnlockZone openZone;
 
         bool isOpen;
@@ -26,9 +46,9 @@ namespace BurgerIdle.Customers
 
         void Start()
         {
-            if (prefab == null || queue == null || area == null)
+            if (PickPrefab() == null || queue == null || area == null)
             {
-                Debug.LogError($"[CustomerSpawner] {name}: Prefab, Queue, Area를 연결하세요.", this);
+                Debug.LogError($"[CustomerSpawner] {name}: Prefab(또는 Variants), Queue, Area를 연결하세요.", this);
                 enabled = false;
                 return;
             }
@@ -41,7 +61,13 @@ namespace BurgerIdle.Customers
             }
 
             if (openZone == null)
+                openZone = GetComponentInParent<Zone>(true)?.Facilities;
+
+            if (openZone == null)
+            {
+                Debug.LogWarning($"[CustomerSpawner] {name}: Open Zone이 없어 바로 입장을 시작합니다.", this);
                 isOpen = true;
+            }
             else
                 openZone.IsCompleted.Subscribe(completed => isOpen = completed).AddTo(this);
         }
@@ -59,8 +85,36 @@ namespace BurgerIdle.Customers
             area.TryGetGate(entranceType, out var entrance);
             area.TryGetGate(exitType, out var exit);
 
-            var member = ObjectPools.Get(prefab, entrance.OutsidePoint, entrance.EnterRotation);
+            var member = ObjectPools.Get(PickPrefab(), entrance.OutsidePoint, entrance.EnterRotation);
             member.Begin(queue, entrance.InsidePoint, exit.ExitRoute);
+        }
+
+        QueueMember PickPrefab()
+        {
+            if (variants == null || variants.Length == 0)
+                return prefab;
+
+            var total = 0f;
+            foreach (var variant in variants)
+            {
+                if (variant.prefab != null)
+                    total += variant.weight;
+            }
+
+            if (total <= 0f)
+                return prefab;
+
+            var roll = UnityEngine.Random.Range(0f, total);
+            foreach (var variant in variants)
+            {
+                if (variant.prefab == null)
+                    continue;
+                roll -= variant.weight;
+                if (roll <= 0f)
+                    return variant.prefab;
+            }
+
+            return prefab;
         }
     }
 }
