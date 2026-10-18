@@ -17,7 +17,13 @@ namespace BurgerIdle.Unlock
         [Tooltip("솟아오르기·내려가기 이동 거리")]
         [SerializeField] float moveDistance = 3f;
 
+        readonly ReactiveProperty<bool> isFinished = new ReactiveProperty<bool>(false);
         Zone[] zones;
+
+        /// <summary>마지막 Zone(예: ZoneEnd)의 확장 박스를 해금했다 = 데모 완료</summary>
+        public ReadOnlyReactiveProperty<bool> IsFinished => isFinished;
+
+        void Awake() => isFinished.AddTo(this);
 
         /// <summary>시작 상태로 숨기고 단계 완료를 구독한다. 시작 공간(Expansion 없는 Zone)은 그대로 둔다.</summary>
         public void Init()
@@ -56,6 +62,8 @@ namespace BurgerIdle.Unlock
                             Expand(zone);
                             if (!zone.HasFacilities && next != null)
                                 ShowExpansion(next);
+                            if (next == null)
+                                isFinished.Value = true;
                         })
                         .AddTo(this);
                 }

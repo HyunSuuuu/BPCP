@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using BurgerIdle.Delivery;
 using BurgerIdle.Economy;
 using BurgerIdle.Money;
+using BurgerIdle.Online;
 using BurgerIdle.Pickup;
 using BurgerIdle.Player;
 using BurgerIdle.Station;
@@ -69,10 +70,12 @@ namespace BurgerIdle.Core
             var playerLevel = new PlayerLevel(levelTable, currency).AddTo(this);
             var upgrades = CreateUpgrades(currency, playerLevel);
             hud.Init(currency, playerLevel);
+            GameStats.StartSession();
+            FirebaseService.Init(hud.Notifications);
 
             // 해금 전 시설과 열리지 않은 Zone을 먼저 숨긴 뒤 NavMesh를 굽고, 그 위에 플레이어를 올린다
             SetupUnlockBoxes(currency, playerLevel);
-            SetupZones();
+            SetupZones(playerLevel);
             SetupNavMesh();
             SetupPlayer(currency, upgrades);
             SetupCamera();
@@ -173,10 +176,19 @@ namespace BurgerIdle.Core
             return agent;
         }
 
-        void SetupZones()
+        void SetupZones(PlayerLevel playerLevel)
         {
             foreach (var zones in FindAll<ZoneManager>())
+            {
                 zones.Init();
+
+                // 데모 완료(마지막 Zone 해금) 시 클리어 기록을 Firebase에 남긴다 (Firebase가 꺼져 있으면 무시)
+                zones.IsFinished
+                    .Where(finished => finished)
+                    .Take(1)
+                    .Subscribe(_ => FirebaseService.RecordClear(GameStats.PlaySeconds, playerLevel.Level.CurrentValue, GameStats.Sales))
+                    .AddTo(this);
+            }
         }
 
         static T GetOrAdd<T>(GameObject target) where T : Component =>

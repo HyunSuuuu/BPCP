@@ -119,6 +119,7 @@ namespace BurgerIdle.Delivery
 
             currency.Add(CurrencyType.Money, money);
             currency.Add(CurrencyType.Exp, exp);
+            GameStats.AddSales(quantity);
             notifications?.Show($"배달 성공!\n+{money:N0}");
         }
     }

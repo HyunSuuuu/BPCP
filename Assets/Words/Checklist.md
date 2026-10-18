@@ -19,6 +19,7 @@
 | P12 | Zone 3 · 배달 (재추가, ZoneEnd 앞) | 6.14 | ✅ 완료 |
 | P13 | 진상 손님 · 마무리 연출 | 6.8 | 대기 (엔딩은 P11 ZoneEnd 알림으로 완료) |
 | P14 | 저장 · 오프라인 보상 | 3장 | 대기 |
+| **F1~F3** | **Firebase 실습: 준비·익명 로그인 → Firestore 클리어 기록 → FCM 푸시** | - | ▶ **작업 중** |
 
 > **현재 상태 (2026-10-13):** P0~P12 완료, 시작부터 엔딩(ZoneEnd)까지 플레이 가능. 다음: 빌드 → (선택) P13 진상 손님·연출, P14 저장
 
@@ -280,6 +281,34 @@ GDD 6.12 기준. 드라이브스루 차량(P11)과 배달원(P12)이 같은 구�
 - [ ] (사용자) Version 정하기 (현재 0.1.0), Android Bundle Version Code
 - [ ] (사용자) 아이콘·스플래시 (선택)
 - [ ] (사용자) Development Build 끄고 빌드 → 실행 확인 (Windows exe, Android APK)
+
+## Firebase 실습 (2026-10-18)
+
+결정: 빠르고 간단한 연결 실습만 (저장 기능 없음). Android 12 에뮬레이터(Google Play 이미지), Firestore 서울(asia-northeast3), SDK는 UPM(.tgz), 익명 로그인, 클리어할 때마다 기록 추가(닉네임 없음), 푸시는 콘솔에서 보내는 간단한 알림만, `google-services.json`은 git 제외
+코드: `Online/FirebaseService`(정의 기호 `BPCP_FIREBASE`가 있을 때만 동작, 없으면 무시 → PC 빌드 영향 없음), `Core/GameStats`(플레이 시간·판매 수), `ZoneManager.IsFinished`(마지막 Zone 해금)
+
+### F1. 준비 · 익명 로그인
+> F1 완료 (2026-10-19): MuMu Player 12에서 준비 완료·익명 로그인·FCM 토큰·토픽 구독 로그 확인
+
+- [x] (사용자) Package Name 변경 → `com.bpcp.burgeridle`
+- [x] (사용자) Firebase 프로젝트 생성, Android 앱 등록, `google-services.json`을 Assets에 넣기
+- [x] (사용자) Authentication → 익명 로그인 사용 설정
+- [x] (사용자) SDK 설치: External Dependency Manager 1.2.190 + Firebase App·Auth·Firestore·Messaging 14.0.0 (.tgz, `Packages/Firebase/`)
+- [x] (사용자) 테스트 기기: Android Studio 대신 MuMu Player 12 (APK 끌어다 설치, adb connect 후 Android Logcat)
+- [x] (사용자) Android 정의 기호 `BPCP_FIREBASE`, Android Resolver 실행, File → Save Project (Target Architectures는 ARM64 그대로: 이 Unity 버전에는 x86_64 항목이 없고, Android 11+ 에뮬레이터가 ARM 앱을 변환 실행)
+- [x] `FirebaseService.Init`: 의존성 확인 → 익명 로그인 → UID 로그
+- **완료 기준:** 에뮬레이터 Logcat에 `[Firebase] 익명 로그인: (UID)`, 콘솔 Authentication 사용자 목록에 익명 사용자 1명
+
+### F2. Firestore 클리어 기록
+- [ ] (사용자) Firestore 데이터베이스 생성 (서울), 보안 규칙 적용
+- [x] 데모 완료(마지막 Zone 해금) 시 `clears` 컬렉션에 기록 추가: uid, playSeconds, level, sales, platform, clearedAt(서버 시각)
+- [x] 판매 수 집계: 카운터·드라이브스루 판매 + 배달 성공 수량
+- **완료 기준:** 클리어 후 Firestore 콘솔 `clears`에 문서 1개 생성
+
+### F3. FCM 푸시
+- [x] FCM 토큰 로그, `all` 토픽 구독, 앱이 켜져 있을 때 받은 알림은 게임 알림 팝업으로 표시
+- [ ] (사용자) 콘솔 Messaging에서 테스트 메시지(토큰) → 토픽 `all` 캠페인 발송
+- **완료 기준:** 앱이 켜져 있으면 게임 알림 팝업, 백그라운드면 Android 알림창에 표시되고 누르면 앱이 열림
 
 ## 공통 규칙 (모든 Phase)
 

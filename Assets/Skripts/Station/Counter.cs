@@ -187,6 +187,7 @@ namespace BurgerIdle.Station
             customer.Serve(food);
             moneyPile.Add(config.PriceOf(kind), stock.transform.position + Vector3.up);
             currency.Add(CurrencyType.Exp, config.ExpOf(kind));
+            GameStats.AddSales(1);
         }
     }
 }
