@@ -20,9 +20,9 @@
 | P13 | 진상 손님 · 마무리 연출 | 6.8 | 대기 (엔딩은 P11 ZoneEnd 알림으로 완료) |
 | P14 | 저장 · 오프라인 보상 | 3장 | 대기 |
 | F1~F3 | Firebase 실습: 준비·익명 로그인 → Firestore 클리어 기록 → FCM 푸시 | - | 일시 중지 (F1 완료, F2 1단계부터 재개) |
-| **P15** | **지역(Area) 확장: 지역별 레벨·클리어, 미니맵(입장·수거), 지속 수입, 현재 Area 10개 복제 테스트** | 10.1 | ▶ **다음 작업** (2026-10-22 개편, 결정 완료) |
+| P15 | 지역(Area) 확장: 지역별 레벨·클리어, 미니맵(입장·수거), 지속 수입, Area 10개 | 10.1 | ✅ 완료 (2026-10-22) |
 
-> **현재 상태 (2026-10-21):** P0~P12 완료, 시작부터 엔딩(ZoneEnd)까지 플레이 가능, PC 빌드 준비 완료. Firebase 실습 F1 완료 후 일시 중지. 다음: **P15 지역(Area) 확장** → Firebase F2·F3 재개 → (선택) P13 진상 손님·연출, P14 저장
+> **현재 상태 (2026-10-22):** P0~P12, P15 완료. 10개 지역을 차례로 열고 미니맵으로 오가며 지속 수입을 수거하는 데까지 플레이 가능, 기능 테스트 통과. 다음: 완성도 작업 → Firebase F2·F3 재개 → (선택) P13 진상 손님·연출, P14 저장
 
 ---
 
@@ -300,7 +300,8 @@ GDD 10.1 기준. 지역마다 레벨이 따로 있고, 레벨업 10회를 하면
 - [x] ~~❓ 미니맵 표현·잠긴 지역·게임 정지~~ → UI 지도(ScrollRect), 잠긴 지역 모두 자물쇠, 열려 있는 동안 게임 정지
 - [x] ~~❓ 미니맵 위치·닫기~~ → MainScene UI 패널 + 페이드 (별도 씬 안 씀), X 버튼·뒤로가기(Esc)
 
-> 코드 작성 완료 (2026-10-22), 사용자 컴파일·플레이 테스트 대기.
+> 코드 작성 완료 (2026-10-22), 플레이 테스트 진행 중.
+> 수정 (2026-10-22): ① 플레이어 Y가 −0.1로 내려감 → Base Offset을 렌더러 발끝 기준으로 계산, NavMesh 굽기 판단을 `enabled && activeInHierarchy`로(`isActiveAndEnabled`는 OnEnable 전 false) ② 2지역 이후 매장 해금 시 이동 불가 → Area 프리팹에 에디터 Bake 에셋(`NavMesh-Area`, 기준 위치 0)이 공유돼 `UpdateNavMesh`가 NavMesh를 비움. 실행 중에는 지역마다 처음 한 번 새로 굽고 그 데이터만 갱신 — 사용자 확인 완료
 > 신규: `Area/AreaManager`, `Area/RegionState`, `UI/MiniMapView`, `UI/MiniMapStoreIcon`, `UI/MiniMapStorePopup`, `UI/ScreenFader`.
 > 변경: 경험치는 `CurrencyManager`에서 빠지고 지역의 `PlayerLevel.AddExp`로 감, 풀 오브젝트는 현재 지역 Area 아래에 생김(`ObjectPools.ActiveParent`), 알바는 `WorkerManager` 아래에 생김, `GameBootstrap`은 오브젝트가 속한 Area의 지역에 연결(Area 밖이면 첫 지역), Ground는 선택(NavMesh가 없을 때만 사용)
 
@@ -309,7 +310,7 @@ GDD 10.1 기준. 지역마다 레벨이 따로 있고, 레벨업 10회를 하면
 - [x] `Area` 설정 칸: Display Name(비우면 "지역 N"), Unlock Cost Multiplier, Income Multiplier, Income Per Minute, Start Point
 - [x] 지역 전환: 떠나는 지역 멈춤(숨김, 그 지역 풀 오브젝트 포함), 도착 지역 다시 움직임(떠날 때 상태 그대로), 페이드 순간이동 (NavMeshAgent Warp)
 - [x] 마지막 지역 클리어 시 데모 완료 알림·Firebase 클리어 기록 (`ZoneManager.IsFinished` 대신 `AreaManager`에서)
-- [ ] (사용자) 각 Area에서 ZoneEnd 오브젝트 삭제 (Zone 3이 마지막 Zone)
+- [x] (사용자) 각 Area에서 ZoneEnd 오브젝트 삭제 (Zone 3이 마지막 Zone)
 
 **지역 레벨과 클리어**
 - [x] 지역별 데이터 묶음(RegionState): 경험치·레벨·업그레이드 레벨·클리어 여부·지속 수입 적립액. 지역 이동 시 플레이어·HUD·업그레이드 패널이 도착 지역 묶음으로 바꿔 구독 (파일 저장은 P14, 그대로 직렬화할 수 있는 구조로)
@@ -317,7 +318,7 @@ GDD 10.1 기준. 지역마다 레벨이 따로 있고, 레벨업 10회를 하면
 - [x] HUD 레벨·경험치 바는 현재 지역 레벨을 표시
 - [x] 해금 박스·업그레이드 필요 레벨을 그 지역 레벨로 검사
 - [x] 클리어 = `LevelTable` 최대 레벨 도달 (모든 지역이 같은 LevelTable 사용)
-- [ ] (사용자) `Data/Level/LevelTable` Max Level 10 → 11
+- [x] (사용자) `Data/Level/LevelTable` Max Level 10 → 11
 - [x] 최대 레벨 도달 → 지역 클리어 → 다음 지역 즉시 무료 해금 + "새 지역 오픈! (이름)" 알림 (자동 이동 없음)
 - [x] 클리어한 지역은 레벨 고정(MAX 표시, 경험치 안 쌓임), 플레이는 계속 가능
 
@@ -343,26 +344,26 @@ GDD 10.1 기준. 지역마다 레벨이 따로 있고, 레벨업 10회를 하면
 - [x] 매장 UI 밖 클릭·드래그 시 매장 UI 닫힘
 - [x] 입장 → 미니맵 닫힘 + 그 지역으로 순간이동 (같은 페이드 안에서), 지금 지역이면 닫기만
 - [x] 다른 지역으로 이동 시 플레이어가 든 물건 버림 (`CarryStack` 비우고 풀 반납)
-- [ ] (사용자) 나침반 버튼(HUD 우하단 Button), 미니맵(`MiniMapView` + 자식 Window: 배경·ScrollRect·Content·X 버튼·매장 UI), 매장 아이콘 프리팹(`MiniMapStoreIcon`), 매장 UI(`MiniMapStorePopup`), 페이드(`ScreenFader`, 맨 위)
+- [x] 나침반 버튼(`HUD/CompassButton`), 미니맵(`Canvas/Minimap` + `MiniMapView`, Window·ScrollView/Viewport/Content·CloseButton·StorePopup), 매장 아이콘 프리팹(`Prefab/UI/MiniMapStoreIcon`), 매장 UI(`MiniMapStorePopup`), 페이드(`Canvas/Fader`) — 2026-10-22 사용자 승인 후 MCP로 생성·연결
 
 **디버그**
 - [x] `DebugCheats`: E 현재 지역 경험치 +5, L 현재 지역 레벨 +1, R 다음 열린 지역으로 이동 (미니맵 없이 테스트, 에디터·개발 빌드만)
 
 **배치**
-- [ ] (사용자) 빈 오브젝트 `Areas` + `AreaManager`, 기존 Area를 그 자식으로 (Bootstrap의 Areas 칸은 비워도 자동으로 찾음)
-- [ ] (사용자) 지역에 속한 것을 Area 안으로: `WorkerManager`([Systems]에서 Area 아래로), 스포너·직원 대기 지점·업그레이드 패드는 이미 Area 안인지 확인. `UpgradePanel`·HUD·미니맵은 [UI]에 하나만 (지역 이동 시 대상만 바뀜)
-- [ ] (사용자) 현재 Area를 프리팹으로 만들고 `Areas` 아래 10개 배치 (지역끼리 겹치지 않게 간격), 지역마다 Income Per Minute·Map Position 다르게
+- [x] (사용자) 빈 오브젝트 `Areas` + `AreaManager`, 기존 Area를 그 자식으로 (Bootstrap의 Areas 칸은 비워도 자동으로 찾음)
+- [x] (사용자) 지역에 속한 것을 Area 안으로: `WorkerManager`([Systems]에서 Area 아래로), 스포너·직원 대기 지점·업그레이드 패드는 이미 Area 안인지 확인. `UpgradePanel`·HUD·미니맵은 [UI]에 하나만 (지역 이동 시 대상만 바뀜)
+- [x] (사용자) 현재 Area를 프리팹으로 만들고 `Areas` 아래 10개 배치 (지역끼리 겹치지 않게 간격), 지역마다 Income Per Minute·Map Position 다르게 — 2026-10-22 MCP: `Prefab/Area/Area.prefab`, `Area_01`(버거킹)~`Area_10`, X 200 간격, 분당 1000×N, Map Position 지그재그
 
 **테스트**
-- [ ] 지역마다 레벨이 따로 오르고, 레벨업 10회마다 다음 지역이 미니맵에서 열림
-- [ ] 나침반 버튼 → 미니맵 → 매장 클릭 → 입장으로 열린 지역을 오가고, 돌아가면 떠날 때 상태 그대로
-- [ ] 미클리어 지역은 입장만, 클리어 지역은 입장·수거와 분당 수입 표시
-- [ ] 클리어한 지역에 지속 수입이 쌓이고 수거 버튼으로 받음
-- [ ] 매장 UI 밖 클릭·드래그 시 매장 UI 닫힘, 드래그로 미니맵 이동
-- [ ] 모든 업그레이드(플레이어 포함)는 지역마다 따로, 지역 이동 시 플레이어 스탯 전환, 돈은 공유
-- [ ] 중간 지역 삭제·순서 변경 후에도 코드 수정 없이 이어서 열림
-- [ ] 10개 지역에서 프레임 유지 (동작하는 지역은 항상 1개)
-- **완료 기준:** 지역마다 레벨업 10회로 1 → 10 지역이 차례로 열리고, 미니맵으로 오가며 지속 수입을 수거하고, Area 복제·삭제·순서 변경만으로 지역 수가 바뀜
+- [x] 지역마다 레벨이 따로 오르고, 레벨업 10회마다 다음 지역이 미니맵에서 열림
+- [x] 나침반 버튼 → 미니맵 → 매장 클릭 → 입장으로 열린 지역을 오가고, 돌아가면 떠날 때 상태 그대로
+- [x] 미클리어 지역은 입장만, 클리어 지역은 입장·수거와 분당 수입 표시
+- [x] 클리어한 지역에 지속 수입이 쌓이고 수거 버튼으로 받음 (2026-10-22 확인)
+- [x] 매장 UI 밖 클릭·드래그 시 매장 UI 닫힘, 드래그로 미니맵 이동
+- [x] 모든 업그레이드(플레이어 포함)는 지역마다 따로, 지역 이동 시 플레이어 스탯 전환, 돈은 공유
+- [x] 중간 지역 삭제·순서 변경 후에도 코드 수정 없이 이어서 열림
+- [x] 10개 지역에서 프레임 유지 (동작하는 지역은 항상 1개)
+- **완료 기준:** 지역마다 레벨업 10회로 1 → 10 지역이 차례로 열리고, 미니맵으로 오가며 지속 수입을 수거하고, Area 복제·삭제·순서 변경만으로 지역 수가 바뀜 ✅
 
 ## Firebase 실습 (2026-10-18)
 
@@ -394,7 +395,9 @@ GDD 10.1 기준. 지역마다 레벨이 따로 있고, 레벨업 10회를 하면
 
 ## 공통 규칙 (모든 Phase)
 
+- [ ] 대답·설명·질문은 한국어로 (GDD 0장 7번)
 - [ ] `.unity` / `.prefab` 직접 편집 금지
+- [ ] Unity MCP로 만들기·연결·변경·삭제, 씬 저장, Play 실행 전에는 반드시 사용자 확인 (읽기·조회·스크린샷은 확인 없이 가능)
 - [ ] 밸런스 수치는 ScriptableObject로 분리, 하드코딩 금지
 - [ ] 상태는 `ReactiveProperty`, UI는 `Subscribe`, 모든 구독 `.AddTo(this)`
 - [ ] 돈 증감은 `CurrencyManager` 경유만, 경험치는 지역의 `PlayerLevel.AddExp` 경유만 (P15)
