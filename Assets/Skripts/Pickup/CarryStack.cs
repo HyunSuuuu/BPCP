@@ -126,6 +126,14 @@ namespace BurgerIdle.Pickup
             return item;
         }
 
+        /// <summary>들고 있는 물건을 모두 버린다 (풀 반납). 다른 지역으로 이동할 때 쓴다.</summary>
+        public void Clear()
+        {
+            PickupObject item;
+            while ((item = Pop()) != null)
+                item.Release();
+        }
+
         void LateUpdate()
         {
             var dt = Time.deltaTime;

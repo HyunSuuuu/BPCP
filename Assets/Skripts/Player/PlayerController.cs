@@ -7,13 +7,14 @@ namespace BurgerIdle.Player
 {
     /// <summary>
     /// 조이스틱(가상 Gamepad 왼쪽 스틱) 또는 WASD 입력으로 XZ 평면을 이동한다. 이동 방향은 카메라 기준.
-    /// NavMeshAgent가 NavMesh 위에 있으면 NavMesh 안으로만 움직인다 (매장 확장에 따라 범위가 넓어지고,
-    /// 시설은 통과하지 않고 미끄러지듯 돌아간다). NavMesh가 없으면 바닥 사각형 안으로 제한한다.
+    /// NavMeshAgent가 있으면 NavMesh 안으로만 움직인다 (매장 확장에 따라 범위가 넓어지고,
+    /// 시설은 통과하지 않고 미끄러지듯 돌아간다). NavMesh가 없는 씬이면 바닥 사각형 안으로 제한한다.
     /// </summary>
     public sealed class PlayerController : MonoBehaviour
     {
         const float MoveThreshold = 0.01f;
         const float NavMeshSearchRadius = 2f;
+        const float TeleportSearchRadius = 10f;
 
         readonly ReactiveProperty<bool> isMoving = new ReactiveProperty<bool>(false);
 
@@ -78,10 +79,12 @@ namespace BurgerIdle.Player
             var direction = Quaternion.Euler(0f, yaw, 0f) * new Vector3(input.x, 0f, input.y);
             var delta = direction * (stats.MoveSpeed.CurrentValue * Time.deltaTime);
 
-            if (agent != null && TrySnapToNavMesh())
+            if (agent != null)
             {
-                // NavMesh 경계·장애물을 따라 미끄러지듯 이동
-                agent.Move(delta);
+                // NavMesh 경계·장애물을 따라 미끄러지듯 이동. NavMesh를 다시 굽는 중이라 잠시 벗어나 있으면 움직이지 않는다
+                // (바닥 사각형으로 제한하면 다른 지역에 있을 때 엉뚱한 바닥 범위로 끌려감)
+                if (TrySnapToNavMesh())
+                    agent.Move(delta);
             }
             else
             {
@@ -93,6 +96,18 @@ namespace BurgerIdle.Player
 
             var targetRotation = Quaternion.LookRotation(direction, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, turnSpeed * Time.deltaTime);
+        }
+
+        /// <summary>순간이동 (지역 이동). NavMesh가 있으면 가장 가까운 NavMesh 위로 옮긴다.</summary>
+        public void Teleport(Vector3 position)
+        {
+            if (NavMesh.SamplePosition(position, out var hit, TeleportSearchRadius, NavMesh.AllAreas))
+                position = hit.position;
+
+            if (agent != null && agent.isActiveAndEnabled && agent.Warp(position))
+                return;
+
+            transform.position = position;
         }
 
         /// <summary>NavMesh 위에 있거나 가까운 NavMesh로 옮길 수 있으면 true.</summary>

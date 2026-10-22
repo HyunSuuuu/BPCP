@@ -300,51 +300,56 @@ GDD 10.1 기준. 지역마다 레벨이 따로 있고, 레벨업 10회를 하면
 - [x] ~~❓ 미니맵 표현·잠긴 지역·게임 정지~~ → UI 지도(ScrollRect), 잠긴 지역 모두 자물쇠, 열려 있는 동안 게임 정지
 - [x] ~~❓ 미니맵 위치·닫기~~ → MainScene UI 패널 + 페이드 (별도 씬 안 씀), X 버튼·뒤로가기(Esc)
 
+> 코드 작성 완료 (2026-10-22), 사용자 컴파일·플레이 테스트 대기.
+> 신규: `Area/AreaManager`, `Area/RegionState`, `UI/MiniMapView`, `UI/MiniMapStoreIcon`, `UI/MiniMapStorePopup`, `UI/ScreenFader`.
+> 변경: 경험치는 `CurrencyManager`에서 빠지고 지역의 `PlayerLevel.AddExp`로 감, 풀 오브젝트는 현재 지역 Area 아래에 생김(`ObjectPools.ActiveParent`), 알바는 `WorkerManager` 아래에 생김, `GameBootstrap`은 오브젝트가 속한 Area의 지역에 연결(Area 밖이면 첫 지역), Ground는 선택(NavMesh가 없을 때만 사용)
+
 **지역 관리**
-- [ ] `AreaManager`: `Areas` 아래 Area를 Hierarchy 순서대로 사용, 지역 수를 코드에 적지 않음, 열리지 않은 지역 숨김
-- [ ] `Area` 설정 칸: Display Name(비우면 "지역 N"), Unlock Cost Multiplier, Income Multiplier, Income Per Minute, Start Point
-- [ ] 지역 전환: 떠나는 지역 멈춤(숨김, 그 지역 풀 오브젝트 포함), 도착 지역 다시 움직임(떠날 때 상태 그대로), 페이드 순간이동 (NavMeshAgent Warp)
-- [ ] 마지막 지역 클리어 시 데모 완료 알림·Firebase 클리어 기록 (`ZoneManager.IsFinished` 대신 `AreaManager`에서)
+- [x] `AreaManager`: `Areas` 아래 Area를 Hierarchy 순서대로 사용, 지역 수를 코드에 적지 않음, 열리지 않은 지역 숨김
+- [x] `Area` 설정 칸: Display Name(비우면 "지역 N"), Unlock Cost Multiplier, Income Multiplier, Income Per Minute, Start Point
+- [x] 지역 전환: 떠나는 지역 멈춤(숨김, 그 지역 풀 오브젝트 포함), 도착 지역 다시 움직임(떠날 때 상태 그대로), 페이드 순간이동 (NavMeshAgent Warp)
+- [x] 마지막 지역 클리어 시 데모 완료 알림·Firebase 클리어 기록 (`ZoneManager.IsFinished` 대신 `AreaManager`에서)
 - [ ] (사용자) 각 Area에서 ZoneEnd 오브젝트 삭제 (Zone 3이 마지막 Zone)
 
 **지역 레벨과 클리어**
-- [ ] 지역별 데이터 묶음(RegionState): 경험치·레벨·업그레이드 레벨·클리어 여부·지속 수입 적립액. 지역 이동 시 플레이어·HUD·업그레이드 패널이 도착 지역 묶음으로 바꿔 구독 (파일 저장은 P14, 그대로 직렬화할 수 있는 구조로)
-- [ ] 경험치·레벨 지역별: 지역마다 `PlayerLevel`, 돈은 `CurrencyManager` 하나 그대로
-- [ ] HUD 레벨·경험치 바는 현재 지역 레벨을 표시
-- [ ] 해금 박스·업그레이드 필요 레벨을 그 지역 레벨로 검사
-- [ ] 클리어 = `LevelTable` 최대 레벨 도달 (모든 지역이 같은 LevelTable 사용)
+- [x] 지역별 데이터 묶음(RegionState): 경험치·레벨·업그레이드 레벨·클리어 여부·지속 수입 적립액. 지역 이동 시 플레이어·HUD·업그레이드 패널이 도착 지역 묶음으로 바꿔 구독 (파일 저장은 P14, 그대로 직렬화할 수 있는 구조로)
+- [x] 경험치·레벨 지역별: 지역마다 `PlayerLevel`, 돈은 `CurrencyManager` 하나 그대로
+- [x] HUD 레벨·경험치 바는 현재 지역 레벨을 표시
+- [x] 해금 박스·업그레이드 필요 레벨을 그 지역 레벨로 검사
+- [x] 클리어 = `LevelTable` 최대 레벨 도달 (모든 지역이 같은 LevelTable 사용)
 - [ ] (사용자) `Data/Level/LevelTable` Max Level 10 → 11
-- [ ] 최대 레벨 도달 → 지역 클리어 → 다음 지역 즉시 무료 해금 + "새 지역 오픈! (이름)" 알림 (자동 이동 없음)
-- [ ] 클리어한 지역은 레벨 고정(MAX 표시, 경험치 안 쌓임), 플레이는 계속 가능
+- [x] 최대 레벨 도달 → 지역 클리어 → 다음 지역 즉시 무료 해금 + "새 지역 오픈! (이름)" 알림 (자동 이동 없음)
+- [x] 클리어한 지역은 레벨 고정(MAX 표시, 경험치 안 쌓임), 플레이는 계속 가능
 
 **지역별·공유 데이터**
-- [ ] 지역 단위 초기화: 지역마다 `ZoneManager`·`WorkerManager`·스포너·NavMesh (`GameBootstrap`의 "첫 번째만 사용" 제거, 이동 범위 NavMesh 기준)
-- [ ] `UpgradeManager` 지역마다 하나: 모든 항목(플레이어 포함) 지역별 레벨, 필요 레벨은 그 지역 레벨 (패드는 자기 지역 레벨 표시)
-- [ ] 지역 이동 시 플레이어 스탯(이동속도·적재량·수익 배율)을 도착 지역 값으로 전환
-- [ ] 지역 배율 적용: 해금 비용(`UnlockBox`), 수익(`Counter`·`MoneyPile`·팁·배달 보상)
+- [x] 지역 단위 초기화: 지역마다 `ZoneManager`·`WorkerManager`·스포너·NavMesh (`GameBootstrap`의 "첫 번째만 사용" 제거, 이동 범위 NavMesh 기준)
+- [x] `UpgradeManager` 지역마다 하나: 모든 항목(플레이어 포함) 지역별 레벨, 필요 레벨은 그 지역 레벨 (패드는 자기 지역 레벨 표시)
+- [x] 지역 이동 시 플레이어 스탯(이동속도·적재량·수익 배율)을 도착 지역 값으로 전환
+- [x] 지역 배율 적용: 해금 비용(`UnlockBox`), 수익(`Counter`·`MoneyPile`·팁·배달 보상)
 
 **지속 수입**
-- [ ] 클리어한 지역마다 플레이어가 떠나 있는 동안 Income Per Minute × 경과 시간 적립 (그 지역 안에 있으면 쌓이지 않음)
-- [ ] 적립 상한: 분당 수입 × 상한 시간(데이터, 기본 120분), 상한이면 매장 UI에 MAX
-- [ ] 수익 배율·지역 Income Multiplier 적용 안 함
-- [ ] 수거 시 `CurrencyManager.Add`로 바로 입금, 적립액 0으로
+- [x] 클리어한 지역마다 플레이어가 떠나 있는 동안 Income Per Minute × 경과 시간 적립 (그 지역 안에 있으면 쌓이지 않음)
+- [x] 적립 상한: 분당 수입 × 상한 시간(데이터, 기본 120분), 상한이면 매장 UI에 MAX
+- [x] 수익 배율·지역 Income Multiplier 적용 안 함
+- [x] 수거 시 `CurrencyManager.Add`로 바로 입금, 적립액 0으로
 
 **나침반 버튼 · 미니맵**
-- [ ] HUD 우하단 나침반 버튼 → 페이드 → 미니맵(MainScene UI 전체 화면 패널) 열기, 열려 있는 동안 게임 정지
-- [ ] 닫기: X 버튼, 뒤로가기(PC Esc) → 페이드 → 원래 지역, 게임 재개 (페이드는 시간 배율 무시)
-- [ ] 미니맵(UI 지도): 배경 + 매장 아이콘, 플레이어 표시 없음, 드래그(ScrollRect)로 화면 이동
-- [ ] 매장 아이콘은 Area 목록에서 자동 생성, 위치는 Area의 Map Position
-- [ ] 잠긴 지역: 어둡게 + 자물쇠, 클릭 시 오픈 조건 안내만 (버튼 비활성)
-- [ ] 매장 클릭 → 매장 UI: 입장 버튼(열린 지역), 수거 버튼·분당 수입(클리어 지역만)
-- [ ] 매장 UI 밖 클릭·드래그 시 매장 UI 닫힘
-- [ ] 입장 → 미니맵 닫힘 + 그 지역으로 순간이동 (같은 페이드 안에서), 지금 지역이면 닫기만
-- [ ] 다른 지역으로 이동 시 플레이어가 든 물건 버림 (`CarryStack` 비우고 풀 반납)
-- [ ] (사용자) 나침반 버튼·미니맵·매장 표시·매장 UI 프리팹
+- [x] HUD 우하단 나침반 버튼 → 페이드 → 미니맵(MainScene UI 전체 화면 패널) 열기, 열려 있는 동안 게임 정지
+- [x] 닫기: X 버튼, 뒤로가기(PC Esc) → 페이드 → 원래 지역, 게임 재개 (페이드는 시간 배율 무시)
+- [x] 미니맵(UI 지도): 배경 + 매장 아이콘, 플레이어 표시 없음, 드래그(ScrollRect)로 화면 이동
+- [x] 매장 아이콘은 Area 목록에서 자동 생성, 위치는 Area의 Map Position
+- [x] 잠긴 지역: 어둡게 + 자물쇠, 클릭 시 오픈 조건 안내만 (버튼 비활성)
+- [x] 매장 클릭 → 매장 UI: 입장 버튼(열린 지역), 수거 버튼·분당 수입(클리어 지역만)
+- [x] 매장 UI 밖 클릭·드래그 시 매장 UI 닫힘
+- [x] 입장 → 미니맵 닫힘 + 그 지역으로 순간이동 (같은 페이드 안에서), 지금 지역이면 닫기만
+- [x] 다른 지역으로 이동 시 플레이어가 든 물건 버림 (`CarryStack` 비우고 풀 반납)
+- [ ] (사용자) 나침반 버튼(HUD 우하단 Button), 미니맵(`MiniMapView` + 자식 Window: 배경·ScrollRect·Content·X 버튼·매장 UI), 매장 아이콘 프리팹(`MiniMapStoreIcon`), 매장 UI(`MiniMapStorePopup`), 페이드(`ScreenFader`, 맨 위)
 
 **디버그**
-- [ ] `DebugCheats`: 현재 지역 레벨 올리기 키 (10개 지역 클리어 테스트용, 에디터·개발 빌드만)
+- [x] `DebugCheats`: E 현재 지역 경험치 +5, L 현재 지역 레벨 +1, R 다음 열린 지역으로 이동 (미니맵 없이 테스트, 에디터·개발 빌드만)
 
 **배치**
+- [ ] (사용자) 빈 오브젝트 `Areas` + `AreaManager`, 기존 Area를 그 자식으로 (Bootstrap의 Areas 칸은 비워도 자동으로 찾음)
 - [ ] (사용자) 지역에 속한 것을 Area 안으로: `WorkerManager`([Systems]에서 Area 아래로), 스포너·직원 대기 지점·업그레이드 패드는 이미 Area 안인지 확인. `UpgradePanel`·HUD·미니맵은 [UI]에 하나만 (지역 이동 시 대상만 바뀜)
 - [ ] (사용자) 현재 Area를 프리팹으로 만들고 `Areas` 아래 10개 배치 (지역끼리 겹치지 않게 간격), 지역마다 Income Per Minute·Map Position 다르게
 
@@ -362,7 +367,7 @@ GDD 10.1 기준. 지역마다 레벨이 따로 있고, 레벨업 10회를 하면
 ## Firebase 실습 (2026-10-18)
 
 결정: 빠르고 간단한 연결 실습만 (저장 기능 없음). Android 12 에뮬레이터(Google Play 이미지), Firestore 서울(asia-northeast3), SDK는 UPM(.tgz), 익명 로그인, 클리어할 때마다 기록 추가(닉네임 없음), 푸시는 콘솔에서 보내는 간단한 알림만, `google-services.json`은 git 제외
-코드: `Online/FirebaseService`(정의 기호 `BPCP_FIREBASE`가 있을 때만 동작, 없으면 무시 → PC 빌드 영향 없음), `Core/GameStats`(플레이 시간·판매 수), `ZoneManager.IsFinished`(마지막 Zone 해금)
+코드: `Online/FirebaseService`(정의 기호 `BPCP_FIREBASE`가 있을 때만 동작, 없으면 무시 → PC 빌드 영향 없음), `Core/GameStats`(플레이 시간·판매 수), `AreaManager.IsFinished`(마지막 지역 클리어, P15 전에는 `ZoneManager.IsFinished`)
 
 ### F1. 준비 · 익명 로그인
 > F1 완료 (2026-10-19): MuMu Player 12에서 준비 완료·익명 로그인·FCM 토큰·토픽 구독 로그 확인
@@ -392,6 +397,6 @@ GDD 10.1 기준. 지역마다 레벨이 따로 있고, 레벨업 10회를 하면
 - [ ] `.unity` / `.prefab` 직접 편집 금지
 - [ ] 밸런스 수치는 ScriptableObject로 분리, 하드코딩 금지
 - [ ] 상태는 `ReactiveProperty`, UI는 `Subscribe`, 모든 구독 `.AddTo(this)`
-- [ ] 돈·경험치 증감은 `CurrencyManager` 경유만
+- [ ] 돈 증감은 `CurrencyManager` 경유만, 경험치는 지역의 `PlayerLevel.AddExp` 경유만 (P15)
 - [ ] 레거시 `UnityEngine.Input`, UniRx API 사용 금지
 - [ ] 풀링 오브젝트 반납 시 `DOKill()` + 초기화

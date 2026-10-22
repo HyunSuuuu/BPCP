@@ -3537,6 +3537,7 @@ MonoBehaviour:
   ground: {fileID: 1793022205}
   hud: {fileID: 667535906}
   mainCamera: {fileID: 0}
+  areas: {fileID: 0}
   playerRadius: 0.5
 --- !u!4 &971718019
 Transform:
@@ -3920,6 +3921,12 @@ MonoBehaviour:
   - {fileID: 529176116}
   - {fileID: 1780629608}
   - {fileID: 1937743347}
+  displayName: 
+  unlockCostMultiplier: 1
+  incomeMultiplier: 1
+  incomePerMinute: 0
+  startPoint: {fileID: 0}
+  mapPosition: {x: 0, y: 0}
 --- !u!114 &988127349
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -14,11 +14,18 @@ namespace BurgerIdle.Core
         static readonly Dictionary<Component, ObjectPool<Component>> pools = new Dictionary<Component, ObjectPool<Component>>();
         static Transform root;
 
+        /// <summary>
+        /// 꺼낸 오브젝트와 어디에도 붙지 않은 픽업·돈 오브젝트를 둘 부모. AreaManager가 현재 지역(Area)으로 바꾼다.
+        /// 지역을 숨기면 그 지역에서 나온 손님·음식·돈도 함께 숨고 멈춘다. null이면 씬 루트.
+        /// </summary>
+        public static Transform ActiveParent { get; set; }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
         {
             pools.Clear();
             root = null;
+            ActiveParent = null;
         }
 
         static Transform Root
@@ -66,7 +73,7 @@ namespace BurgerIdle.Core
                 },
                 actionOnGet: instance =>
                 {
-                    instance.transform.SetParent(null, false);
+                    instance.transform.SetParent(ActiveParent, false);
                     instance.gameObject.SetActive(true);
                 },
                 actionOnRelease: instance =>

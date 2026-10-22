@@ -10,6 +10,7 @@ namespace BurgerIdle.Upgrade
     /// <summary>
     /// 업그레이드 패널. 업그레이드 패드에 들어가면 그 패드의 종류에 해당하는 항목으로 열리고, 벗어나면 닫힌다.
     /// 사용자가 만든 HUD Canvas 안의 패널 오브젝트에 붙인다. 카드는 Entry Prefab으로 Content 아래에 가로로 생성한다.
+    /// 패널은 모든 지역이 하나를 같이 쓰고, 열 때 패드가 자기 지역의 업그레이드·레벨을 넘긴다.
     /// </summary>
     public sealed class UpgradePanel : MonoBehaviour
     {
@@ -37,11 +38,9 @@ namespace BurgerIdle.Upgrade
         PlayerLevel playerLevel;
         object owner;
 
-        public void Init(UpgradeManager manager, CurrencyManager currency, PlayerLevel playerLevel)
+        public void Init(CurrencyManager currency)
         {
-            this.manager = manager;
             this.currency = currency;
-            this.playerLevel = playerLevel;
 
             if (window == null || canvasGroup == null || content == null || entryPrefab == null)
             {
@@ -56,10 +55,16 @@ namespace BurgerIdle.Upgrade
         }
 
         /// <summary>categories가 비어 있으면 모든 항목을 보여 준다.</summary>
-        public void Open(object requester, IReadOnlyCollection<UpgradeCategory> categories, string title)
+        /// <param name="manager">요청한 패드가 속한 지역의 업그레이드</param>
+        /// <param name="playerLevel">요청한 패드가 속한 지역의 레벨</param>
+        public void Open(object requester, IReadOnlyCollection<UpgradeCategory> categories, string title,
+            UpgradeManager manager, PlayerLevel playerLevel)
         {
-            if (!enabled || manager == null)
+            if (!enabled || currency == null || manager == null)
                 return;
+
+            this.manager = manager;
+            this.playerLevel = playerLevel;
 
             // 편집 중 꺼 둔 상태로 저장했어도 열리도록 패널 루트를 켠다
             if (!gameObject.activeSelf)

@@ -45,6 +45,7 @@ namespace BurgerIdle.Unlock
         PlayerController player;
         GameConfig config;
         PlayerLevel playerLevel;
+        float costMultiplier = 1f;
         bool isLocked;
         Vector3 visualScale;
         Vector3 targetScale;
@@ -56,7 +57,9 @@ namespace BurgerIdle.Unlock
         public GameObject Target => target;
         public ReadOnlyReactiveProperty<int> Paid => paid;
         public ReadOnlyReactiveProperty<bool> IsUnlocked => isUnlocked;
-        public int Remaining => definition.cost - paid.Value;
+        /// <summary>실제 비용 = Definition 비용 × 지역 비용 배율 (반올림, 최소 1)</summary>
+        public int Cost => Mathf.Max(1, Mathf.RoundToInt(definition.cost * costMultiplier));
+        public int Remaining => Cost - paid.Value;
 
         void Awake()
         {
@@ -67,12 +70,15 @@ namespace BurgerIdle.Unlock
                 visualScale = visualRoot.localScale;
         }
 
-        public void Init(CurrencyManager currency, PlayerController player, GameConfig config, PlayerLevel playerLevel)
+        /// <param name="playerLevel">이 박스가 속한 지역의 레벨 (필요 레벨 검사, Grant Level 지급)</param>
+        /// <param name="costMultiplier">지역 비용 배율 (Area의 Unlock Cost Multiplier)</param>
+        public void Init(CurrencyManager currency, PlayerController player, GameConfig config, PlayerLevel playerLevel, float costMultiplier = 1f)
         {
             this.currency = currency;
             this.player = player;
             this.config = config;
             this.playerLevel = playerLevel;
+            this.costMultiplier = costMultiplier;
 
             if (definition == null)
             {
@@ -126,7 +132,7 @@ namespace BurgerIdle.Unlock
             if (stillTime < config.unlockStillTime)
                 return;
 
-            payBudget += definition.cost / config.unlockPayDuration * dt;
+            payBudget += Cost / config.unlockPayDuration * dt;
             var request = Mathf.Min((int)payBudget, Remaining);
             if (request <= 0)
                 return;
@@ -198,7 +204,7 @@ namespace BurgerIdle.Unlock
                 costText.text = Remaining.ToString("N0");
 
             if (fillImage != null)
-                fillImage.fillAmount = Mathf.Clamp01(paid.Value / (float)definition.cost);
+                fillImage.fillAmount = Mathf.Clamp01(paid.Value / (float)Cost);
         }
     }
 }

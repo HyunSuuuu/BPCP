@@ -4,29 +4,26 @@ using UnityEngine;
 
 namespace BurgerIdle.Economy
 {
+    /// <summary>경험치는 지역마다 따로라서 재화가 아니라 지역의 PlayerLevel이 가진다.</summary>
     public enum CurrencyType
     {
         Money,
-        Exp,
     }
 
     /// <summary>
-    /// 돈·경험치의 단일 진입점. 증감과 음수·최대값 검증은 모두 이 클래스 안에서만 처리한다.
+    /// 돈의 단일 진입점. 모든 지역이 지갑 하나를 공유한다. 증감과 음수·최대값 검증은 모두 이 클래스 안에서만 처리한다.
     /// </summary>
     public sealed class CurrencyManager : IDisposable
     {
         readonly ReactiveProperty<int> money;
-        readonly ReactiveProperty<int> exp;
         readonly int maxValue;
 
         public ReadOnlyReactiveProperty<int> Money => money;
-        public ReadOnlyReactiveProperty<int> Exp => exp;
 
         public CurrencyManager(int startMoney, int maxValue = int.MaxValue)
         {
             this.maxValue = maxValue;
             money = new ReactiveProperty<int>(Mathf.Clamp(startMoney, 0, maxValue));
-            exp = new ReactiveProperty<int>(0);
         }
 
         public ReadOnlyReactiveProperty<int> Get(CurrencyType type) => Property(type);
@@ -70,16 +67,11 @@ namespace BurgerIdle.Economy
             return spent;
         }
 
-        public void Dispose()
-        {
-            money.Dispose();
-            exp.Dispose();
-        }
+        public void Dispose() => money.Dispose();
 
         ReactiveProperty<int> Property(CurrencyType type) => type switch
         {
             CurrencyType.Money => money,
-            CurrencyType.Exp => exp,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
 

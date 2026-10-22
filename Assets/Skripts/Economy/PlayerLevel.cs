@@ -1,17 +1,19 @@
 using System;
 using R3;
+using UnityEngine;
 
 namespace BurgerIdle.Economy
 {
     /// <summary>
-    /// 누적 경험치(CurrencyManager.Exp)로 플레이어 레벨과 현재 레벨 진행 상황을 계산한다.
+    /// 지역 하나의 경험치와 레벨. 지역(RegionState)마다 하나씩 있고, 그 지역에서 얻은 경험치만 쌓인다.
     /// 업그레이드·해금 박스의 레벨 조건과 HUD가 구독한다.
     /// 레벨 = max(경험치 레벨, 해금으로 받은 레벨). 받은 레벨이 1 미만이면(시작 레벨 0) 경험치와 관계없이 0.
+    /// 최대 레벨(= 지역 클리어)에 닿으면 경험치가 더 쌓이지 않는다.
     /// </summary>
     public sealed class PlayerLevel : IDisposable
     {
         readonly LevelTable table;
-        readonly CurrencyManager currency;
+        readonly ReactiveProperty<int> exp = new ReactiveProperty<int>(0);
         readonly ReactiveProperty<int> level = new ReactiveProperty<int>(1);
         readonly ReactiveProperty<int> expInLevel = new ReactiveProperty<int>(0);
         readonly ReactiveProperty<int> expToNext = new ReactiveProperty<int>(1);
@@ -19,6 +21,8 @@ namespace BurgerIdle.Economy
         readonly IDisposable subscription;
         int grantedLevel;
 
+        /// <summary>누적 경험치</summary>
+        public ReadOnlyReactiveProperty<int> Exp => exp;
         public ReadOnlyReactiveProperty<int> Level => level;
         /// <summary>현재 레벨에서 모은 경험치</summary>
         public ReadOnlyReactiveProperty<int> ExpInLevel => expInLevel;
@@ -26,14 +30,30 @@ namespace BurgerIdle.Economy
         public ReadOnlyReactiveProperty<int> ExpToNext => expToNext;
         /// <summary>현재 레벨에서 다음 레벨까지의 진행도 (0~1). 최대 레벨이면 1.</summary>
         public ReadOnlyReactiveProperty<float> Progress => progress;
+        public int MaxLevel => table.maxLevel;
         public bool IsMaxLevel => level.Value >= table.maxLevel;
 
-        public PlayerLevel(LevelTable table, CurrencyManager currency)
+        public PlayerLevel(LevelTable table)
         {
             this.table = table;
-            this.currency = currency;
             grantedLevel = table.startLevel;
-            subscription = currency.Exp.Subscribe(Recalculate);
+            subscription = exp.Subscribe(Recalculate);
+        }
+
+        /// <summary>경험치를 더한다. 최대 레벨이면 무시.</summary>
+        public void AddExp(int amount)
+        {
+            if (amount < 0)
+            {
+                Debug.LogWarning($"[PlayerLevel] 음수 경험치는 처리하지 않습니다: {amount}");
+                return;
+            }
+
+            if (amount == 0 || IsMaxLevel)
+                return;
+
+            // long으로 더해 오버플로를 막는다
+            exp.Value = (int)Math.Min((long)exp.Value + amount, int.MaxValue);
         }
 
         /// <summary>레벨을 최소 target까지 올린다 (해금 보상). 이미 높으면 무시.</summary>
@@ -43,7 +63,7 @@ namespace BurgerIdle.Economy
                 return;
 
             grantedLevel = Math.Min(target, table.maxLevel);
-            Recalculate(currency.Exp.CurrentValue);
+            Recalculate(exp.Value);
         }
 
         void Recalculate(int totalExp)
@@ -87,6 +107,7 @@ namespace BurgerIdle.Economy
         public void Dispose()
         {
             subscription.Dispose();
+            exp.Dispose();
             level.Dispose();
             expInLevel.Dispose();
             expToNext.Dispose();

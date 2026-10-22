@@ -22,6 +22,13 @@ namespace BurgerIdle.Core
             transform.position = target.position + offset;
         }
 
+        /// <summary>따라가는 연출 없이 바로 대상 위치로 옮긴다 (순간이동 직후).</summary>
+        public void Snap()
+        {
+            if (target != null)
+                transform.position = target.position + offset;
+        }
+
         void LateUpdate()
         {
             if (target == null)

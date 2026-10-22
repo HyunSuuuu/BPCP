@@ -20,7 +20,7 @@ namespace BurgerIdle.Unlock
         readonly ReactiveProperty<bool> isFinished = new ReactiveProperty<bool>(false);
         Zone[] zones;
 
-        /// <summary>마지막 Zone(예: ZoneEnd)의 확장 박스를 해금했다 = 데모 완료</summary>
+        /// <summary>마지막 Zone의 확장 박스를 해금했다 (모든 Zone이 열림). 지역 클리어·데모 완료는 레벨 기준이라 AreaManager가 따로 판단한다</summary>
         public ReadOnlyReactiveProperty<bool> IsFinished => isFinished;
 
         void Awake() => isFinished.AddTo(this);

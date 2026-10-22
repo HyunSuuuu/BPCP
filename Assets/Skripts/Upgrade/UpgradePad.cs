@@ -1,3 +1,4 @@
+using BurgerIdle.Economy;
 using BurgerIdle.Pickup;
 using UnityEngine;
 
@@ -18,14 +19,20 @@ namespace BurgerIdle.Upgrade
         InteractionZone zone;
         Transform player;
         UpgradePanel panel;
+        UpgradeManager upgrades;
+        PlayerLevel playerLevel;
         bool inside;
 
         void Awake() => zone = GetComponent<InteractionZone>();
 
-        public void Init(Transform player, UpgradePanel panel)
+        /// <param name="upgrades">이 패드가 속한 지역의 업그레이드</param>
+        /// <param name="playerLevel">이 패드가 속한 지역의 레벨</param>
+        public void Init(Transform player, UpgradePanel panel, UpgradeManager upgrades, PlayerLevel playerLevel)
         {
             this.player = player;
             this.panel = panel;
+            this.upgrades = upgrades;
+            this.playerLevel = playerLevel;
         }
 
         void Update()
@@ -39,7 +46,7 @@ namespace BurgerIdle.Upgrade
 
             inside = now;
             if (inside)
-                panel.Open(this, categories, title);
+                panel.Open(this, categories, title, upgrades, playerLevel);
             else
                 panel.Close(this);
         }

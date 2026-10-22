@@ -103,7 +103,8 @@
 
 ### 4.2 재화 단일 진입점
 
-- 돈과 경험치의 증감은 반드시 `CurrencyManager.Add()` / `CurrencyManager.TrySpend()`를 거친다.
+- 돈의 증감은 반드시 `CurrencyManager.Add()` / `CurrencyManager.TrySpend()`를 거친다. (모든 지역이 지갑 하나를 공유)
+- 경험치는 지역마다 따로라서(10.1) 그 지역의 `PlayerLevel.AddExp()`를 거친다. 음수 방지·최대 레벨 처리는 `PlayerLevel` 안에서만 한다. (2026-10-22)
 - 음수 방지와 최대값 검증은 이 클래스 안에서만 처리한다.
 - 해금 박스의 부분 지불을 위해 `TrySpend`와 별도로, 가진 돈 범위 내에서 최대한 차감하는 `SpendUpTo(int max)`를 둔다. (실제 차감한 금액을 반환) **[기본값]**
 - 판매 수익과 팁은 판매·식사 종료 시점에 소지금에 더하지 않는다. 돈 더미에 쌓였다가 플레이어가 수거할 때 `CurrencyManager.Add()`를 호출한다. (6.11)

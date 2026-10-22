@@ -6,7 +6,7 @@ namespace BurgerIdle.Workers
 {
     /// <summary>
     /// 알바 고용. 인원수 스탯(업그레이드 "고용")이 오르면 직원 대기 지점에서 알바를 새로 만든다.
-    /// 씬의 빈 오브젝트에 붙인다.
+    /// 지역마다 그 Area 안의 빈 오브젝트에 붙인다. 알바는 이 오브젝트 아래에 생겨, 지역을 떠나면 함께 멈춘다.
     /// </summary>
     public sealed class WorkerManager : MonoBehaviour
     {
@@ -44,7 +44,7 @@ namespace BurgerIdle.Workers
         {
             while (workers.Count < target)
             {
-                var worker = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation);
+                var worker = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation, transform);
                 worker.name = $"{prefab.name}_{workers.Count + 1}";
                 worker.Init(moveSpeed, maxCarry, actionInterval);
                 workers.Add(worker);

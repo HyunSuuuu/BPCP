@@ -12,7 +12,7 @@ namespace BurgerIdle.Station
     /// <summary>
     /// 카운터 판매. 응대 위치에 판매자가 있고, 재고가 있고, 줄 맨 앞 손님이 대기 중이면 일정 간격으로 1개씩 판매한다.
     /// 판매자는 플레이어가 우선이고, 플레이어가 없으면 배정된 알바가 판다 (간격: 플레이어 고정, 알바는 기본 간격 ÷ 행동 속도).
-    /// 판매 수익은 카운터 돈 더미에 쌓이고(수거해야 소지금), 경험치는 바로 지급한다. 판매가는 물건 종류별 (GameConfig.PriceOf).
+    /// 판매 수익은 카운터 돈 더미에 쌓이고(수거해야 소지금), 경험치는 이 카운터가 속한 지역 레벨에 바로 지급한다. 판매가는 물건 종류별 (GameConfig.PriceOf).
     /// 맨 앞 대상이 판매 준비(손님은 테이블 좌석 예약)에 실패하면 판매하지 않는다.
     /// 드라이브스루 카운터도 이 컴포넌트를 쓴다 (Sell Kind = Packed Burger, Queue = 차량 줄).
     /// </summary>
@@ -36,7 +36,7 @@ namespace BurgerIdle.Station
         [SerializeField] CustomerQueue queue;
         [SerializeField] MoneyPile moneyPile;
 
-        CurrencyManager currency;
+        PlayerLevel level;
         Transform player;
         GameConfig config;
         ReadOnlyReactiveProperty<float> workerActionSpeed;
@@ -102,9 +102,10 @@ namespace BurgerIdle.Station
             SupplyTargets.Unregister(this);
         }
 
-        public void Init(CurrencyManager currency, Transform player, GameConfig config, ReadOnlyReactiveProperty<float> workerActionSpeed)
+        /// <param name="level">이 카운터가 속한 지역의 레벨 (판매 경험치를 받음)</param>
+        public void Init(PlayerLevel level, Transform player, GameConfig config, ReadOnlyReactiveProperty<float> workerActionSpeed)
         {
-            this.currency = currency;
+            this.level = level;
             this.player = player;
             this.config = config;
             this.workerActionSpeed = workerActionSpeed;
@@ -130,7 +131,7 @@ namespace BurgerIdle.Station
 
         void Update()
         {
-            if (currency == null)
+            if (level == null)
                 return;
 
             var customer = queue.Front;
@@ -186,7 +187,7 @@ namespace BurgerIdle.Station
             var kind = food.Kind;
             customer.Serve(food);
             moneyPile.Add(config.PriceOf(kind), stock.transform.position + Vector3.up);
-            currency.Add(CurrencyType.Exp, config.ExpOf(kind));
+            level.AddExp(config.ExpOf(kind));
             GameStats.AddSales(1);
         }
     }

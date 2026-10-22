@@ -18,10 +18,13 @@ namespace BurgerIdle.Money
             NavMeshIgnore.Mark(gameObject);
         }
 
-        /// <summary>부모를 바꾸고 프리팹 크기로 되돌린다. 위치는 유지한다. (PickupObject.AttachTo와 같은 이유)</summary>
+        /// <summary>
+        /// 부모를 바꾸고 프리팹 크기로 되돌린다. 위치는 유지한다. (PickupObject.AttachTo와 같은 이유)
+        /// parent가 null이면 현재 지역(ObjectPools.ActiveParent) 아래에 둔다.
+        /// </summary>
         public void AttachTo(Transform parent)
         {
-            transform.SetParent(parent, true);
+            transform.SetParent(parent != null ? parent : ObjectPools.ActiveParent, true);
             transform.localScale = baseScale;
         }
 

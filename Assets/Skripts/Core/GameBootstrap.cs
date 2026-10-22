@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BurgerIdle.Areas;
 using BurgerIdle.Delivery;
 using BurgerIdle.Economy;
 using BurgerIdle.Money;
@@ -24,11 +25,15 @@ namespace BurgerIdle.Core
     /// <summary>
     /// 씬에 배치된 오브젝트를 서로 연결한다. 오브젝트 자체는 사용자가 프리팹으로 만들어 씬에 둔다.
     /// 조이스틱 UI만 코드로 생성한다.
+    /// 지역(Area)마다 레벨·업그레이드(RegionState)를 만들고, 각 시설은 자기가 속한 지역의 것에 연결한다.
     /// </summary>
     public sealed class GameBootstrap : MonoBehaviour
     {
         /// <summary>해금 후 NavMesh를 다시 굽기까지 기다리는 시간 (시설 등장 트윈 0.45초 이후)</summary>
         const float NavMeshRebuildDelay = 0.6f;
+        const float AgentSearchRadius = 2f;
+        /// <summary>NavMesh도 바닥도 없을 때의 이동 범위 (사실상 제한 없음)</summary>
+        static readonly Rect UnlimitedBounds = Rect.MinMaxRect(-100000f, -100000f, 100000f, 100000f);
 
         [Header("Data")]
         [Tooltip("비워 두면 코드 기본값을 쓴다")]
@@ -37,15 +42,21 @@ namespace BurgerIdle.Core
         [Header("Scene References")]
         [Tooltip("씬에 배치한 플레이어. 비워 두면 씬에서 찾는다.")]
         [SerializeField] PlayerController player;
-        [Tooltip("씬에 배치한 바닥. 렌더러의 월드 범위가 이동 가능 범위가 된다.")]
+        [Tooltip("NavMesh가 없을 때만 쓰는 바닥. 렌더러의 월드 범위가 이동 가능 범위가 된다. 비워도 된다.")]
         [SerializeField] Renderer ground;
         [Tooltip("씬에 배치한 HUD Canvas. 비워 두면 씬에서 찾는다.")]
         [SerializeField] Hud hud;
         [Tooltip("비워 두면 Camera.main을 사용한다.")]
         [SerializeField] Camera mainCamera;
+        [Tooltip("지역 관리 (Areas 오브젝트의 AreaManager). 비워 두면 씬에서 찾는다.")]
+        [SerializeField] AreaManager areas;
         [Header("Player")]
         [Tooltip("플레이어가 바닥 가장자리에서 떨어져 있어야 하는 거리")]
         [SerializeField] float playerRadius = 0.5f;
+
+        readonly List<RegionState> regions = new List<RegionState>();
+        readonly Dictionary<Area, RegionState> regionByArea = new Dictionary<Area, RegionState>();
+        NavMeshSurface[] surfaces;
 
         void Awake()
         {
@@ -57,9 +68,12 @@ namespace BurgerIdle.Core
                 player = FindAnyObjectByType<PlayerController>();
             if (hud == null)
                 hud = FindAnyObjectByType<Hud>();
+            if (areas == null)
+                areas = FindAnyObjectByType<AreaManager>(FindObjectsInactive.Include);
 
             // 비어 있는 항목을 한 번에 모두 알리도록 단락 평가(||)를 쓰지 않는다
-            if (!IsInScene(player, "Player") | !IsInScene(ground, "Ground") | !IsInScene(hud, "Hud") | !IsInScene(mainCamera, "Camera"))
+            if (!IsInScene(player, "Player") | !IsInScene(hud, "Hud") | !IsInScene(mainCamera, "Camera")
+                | !IsInScene(areas, "AreaManager(Areas)") | (ground != null && !IsInScene(ground, "Ground")))
             {
                 enabled = false;
                 return;
@@ -67,25 +81,37 @@ namespace BurgerIdle.Core
 
             var currency = new CurrencyManager(config.startMoney).AddTo(this);
             var levelTable = config.levelTable != null ? config.levelTable : ScriptableObject.CreateInstance<LevelTable>();
-            var playerLevel = new PlayerLevel(levelTable, currency).AddTo(this);
-            var upgrades = CreateUpgrades(currency, playerLevel);
-            hud.Init(currency, playerLevel);
+            if (!CreateRegions(currency, levelTable))
+            {
+                enabled = false;
+                return;
+            }
+
+            // 첫 지역만 남기고 숨긴 뒤에 나머지를 초기화한다 (NavMesh를 첫 지역만으로 굽기 위해)
+            areas.Init(regions, currency, hud, OnEnterRegion);
+            var currentLevel = areas.Current
+                .Select(region => region.Level)
+                .ToReadOnlyReactiveProperty()
+                .AddTo(this);
+            hud.Init(currency, currentLevel);
             GameStats.StartSession();
             FirebaseService.Init(hud.Notifications);
+            RecordClearOnFinish();
 
             // 해금 전 시설과 열리지 않은 Zone을 먼저 숨긴 뒤 NavMesh를 굽고, 그 위에 플레이어를 올린다
-            SetupUnlockBoxes(currency, playerLevel);
-            SetupZones(playerLevel);
+            SetupUnlockBoxes(currency);
+            SetupZones();
             SetupNavMesh();
-            SetupPlayer(currency, upgrades);
+            SetupPlayer(currency);
             SetupCamera();
-            SetupStations(currency, upgrades);
-            SetupUpgradePads(currency, playerLevel, upgrades);
-            SetupWorkers(upgrades);
+            SetupStations(currency);
+            SetupUpgradePads(currency);
+            SetupWorkers();
+            SetupMiniMaps();
             CreateJoystick();
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            gameObject.AddComponent<DebugCheats>().Init(currency);
+            gameObject.AddComponent<DebugCheats>().Init(currency, areas);
 #endif
         }
 
@@ -107,7 +133,42 @@ namespace BurgerIdle.Core
             return true;
         }
 
-        /// <summary>업그레이드 스탯의 기본값은 GameConfig에서 가져온다.</summary>
+        /// <summary>Areas 아래 Area마다 레벨·업그레이드 묶음을 만든다.</summary>
+        bool CreateRegions(CurrencyManager currency, LevelTable levelTable)
+        {
+            var found = areas.FindAreas();
+            if (found.Length == 0)
+            {
+                Debug.LogError("[GameBootstrap] Areas(AreaManager) 아래에 Area가 없습니다. 지역 Area를 Areas 오브젝트의 자식으로 옮기세요.", areas);
+                return false;
+            }
+
+            for (var i = 0; i < found.Length; i++)
+            {
+                var level = new PlayerLevel(levelTable);
+                var region = new RegionState(found[i], i, level, CreateUpgrades(currency, level)).AddTo(this);
+                regions.Add(region);
+                regionByArea[found[i]] = region;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 오브젝트가 속한 지역. Area 밖에 있으면 첫 지역으로 처리한다 (지역이 하나일 때와 같은 동작).
+        /// </summary>
+        RegionState RegionOf(Component component)
+        {
+            var area = component.GetComponentInParent<Area>(true);
+            if (area != null && regionByArea.TryGetValue(area, out var region))
+                return region;
+
+            if (regions.Count > 1)
+                Debug.LogWarning($"[GameBootstrap] {component.name}({component.GetType().Name})이(가) Areas 아래 Area 밖에 있어 첫 지역으로 처리합니다. 지역마다 따로 동작하려면 그 지역 Area 안으로 옮기세요.", component);
+            return regions[0];
+        }
+
+        /// <summary>업그레이드 스탯의 기본값은 GameConfig에서 가져온다. 지역마다 하나씩 만든다.</summary>
         UpgradeManager CreateUpgrades(CurrencyManager currency, PlayerLevel playerLevel)
         {
             var baseValues = new Dictionary<StatKey, float>
@@ -131,17 +192,40 @@ namespace BurgerIdle.Core
             };
 
             return new UpgradeManager(config.upgrades, baseValues, ranges, currency, playerLevel,
-                config.adDuration, config.adCooldown).AddTo(this);
+                config.adDuration, config.adCooldown);
         }
 
-        void SetupPlayer(CurrencyManager currency, UpgradeManager upgrades)
-        {
-            var stats = new PlayerStats(upgrades.Stat(StatKey.PlayerMoveSpeed), upgrades.Stat(StatKey.PlayerMaxCarry)).AddTo(this);
+        /// <summary>플레이어가 있는 지역의 업그레이드 스탯. 지역을 옮기면 그 지역 값으로 바뀐다.</summary>
+        ReadOnlyReactiveProperty<float> CurrentStat(StatKey key) =>
+            areas.Current
+                .Select(region => region.Upgrades.Stat(key).AsObservable())
+                .Switch()
+                .ToReadOnlyReactiveProperty()
+                .AddTo(this);
 
-            var area = ground.bounds;
-            var bounds = Rect.MinMaxRect(
-                area.min.x + playerRadius, area.min.z + playerRadius,
-                area.max.x - playerRadius, area.max.z - playerRadius);
+        /// <summary>마지막 지역 클리어(데모 완료) 시 클리어 기록을 Firebase에 남긴다 (Firebase가 꺼져 있으면 무시)</summary>
+        void RecordClearOnFinish()
+        {
+            areas.IsFinished
+                .Where(finished => finished)
+                .Take(1)
+                .Subscribe(_ => FirebaseService.RecordClear(GameStats.PlaySeconds,
+                    areas.Current.CurrentValue.Level.Level.CurrentValue, GameStats.Sales))
+                .AddTo(this);
+        }
+
+        void SetupPlayer(CurrencyManager currency)
+        {
+            var stats = new PlayerStats(CurrentStat(StatKey.PlayerMoveSpeed), CurrentStat(StatKey.PlayerMaxCarry)).AddTo(this);
+
+            var bounds = UnlimitedBounds;
+            if (ground != null)
+            {
+                var area = ground.bounds;
+                bounds = Rect.MinMaxRect(
+                    area.min.x + playerRadius, area.min.z + playerRadius,
+                    area.max.x - playerRadius, area.max.z - playerRadius);
+            }
 
             player.Init(stats, mainCamera.transform, bounds, config.playerTurnSpeed, SetupPlayerAgent());
 
@@ -158,7 +242,7 @@ namespace BurgerIdle.Core
         {
             if (!player.TryGetComponent<NavMeshAgent>(out var agent))
             {
-                if (FindAll<NavMeshSurface>().Length == 0)
+                if (surfaces == null || surfaces.Length == 0)
                     return null;
 
                 var height = 0f;
@@ -176,31 +260,23 @@ namespace BurgerIdle.Core
             return agent;
         }
 
-        void SetupZones(PlayerLevel playerLevel)
+        void SetupZones()
         {
             foreach (var zones in FindAll<ZoneManager>())
-            {
                 zones.Init();
-
-                // 데모 완료(마지막 Zone 해금) 시 클리어 기록을 Firebase에 남긴다 (Firebase가 꺼져 있으면 무시)
-                zones.IsFinished
-                    .Where(finished => finished)
-                    .Take(1)
-                    .Subscribe(_ => FirebaseService.RecordClear(GameStats.PlaySeconds, playerLevel.Level.CurrentValue, GameStats.Sales))
-                    .AddTo(this);
-            }
         }
 
         static T GetOrAdd<T>(GameObject target) where T : Component =>
             target.TryGetComponent<T>(out var component) ? component : target.AddComponent<T>();
 
-        void SetupUnlockBoxes(CurrencyManager currency, PlayerLevel playerLevel)
+        void SetupUnlockBoxes(CurrencyManager currency)
         {
             foreach (var box in FindAll<UnlockBox>())
             {
-                box.Init(currency, player, config, playerLevel);
+                var region = RegionOf(box);
+                box.Init(currency, player, config, region.Level, region.Area.UnlockCostMultiplier);
 
-                // 해금 알림 문구가 있으면 알림 팝업으로 띄운다 (예: 데모 완료)
+                // 해금 알림 문구가 있으면 알림 팝업으로 띄운다
                 var message = box.Definition != null ? box.Definition.unlockMessage : null;
                 if (string.IsNullOrEmpty(message))
                     continue;
@@ -212,26 +288,33 @@ namespace BurgerIdle.Core
             }
         }
 
-        /// <summary>해금 전이라 비활성인 오브젝트도 포함해 초기화한다.</summary>
-        void SetupStations(CurrencyManager currency, UpgradeManager upgrades)
+        /// <summary>해금 전이라 비활성인 오브젝트(열리지 않은 지역 포함)도 포함해 초기화한다.</summary>
+        void SetupStations(CurrencyManager currency)
         {
             foreach (var machine in FindAll<Machine>())
+            {
+                var upgrades = RegionOf(machine).Upgrades;
                 machine.Init(upgrades.Stat(StatKey.MachineProducePerSecond), upgrades.Stat(StatKey.MachineMaxStock));
-            var actionSpeed = upgrades.Stat(StatKey.WorkerActionSpeed);
+            }
             foreach (var counter in FindAll<Counter>())
-                counter.Init(currency, player.transform, config, actionSpeed);
+            {
+                var region = RegionOf(counter);
+                counter.Init(region.Level, player.transform, config, region.Upgrades.Stat(StatKey.WorkerActionSpeed));
+            }
             foreach (var packing in FindAll<PackingTable>())
-                packing.Init(player.transform, config, actionSpeed);
+                packing.Init(player.transform, config, RegionOf(packing).Upgrades.Stat(StatKey.WorkerActionSpeed));
             foreach (var table in FindAll<Table>())
-                table.Init(config, upgrades.Stat(StatKey.TableEatPerItem));
-            var incomeMultiplier = upgrades.Stat(StatKey.PlayerIncomeMultiplier);
+                table.Init(config, RegionOf(table).Upgrades.Stat(StatKey.TableEatPerItem));
             foreach (var pile in FindAll<MoneyPile>())
-                pile.Init(config.moneyPrefab, incomeMultiplier);
+                pile.Init(config.moneyPrefab, RegionOf(pile).IncomeMultiplier);
             foreach (var spawner in FindAll<DeliverySpawner>())
-                spawner.Init(currency, config, incomeMultiplier, hud.Notifications);
+            {
+                var region = RegionOf(spawner);
+                spawner.Init(currency, region.Level, config, region.IncomeMultiplier, hud.Notifications);
+            }
         }
 
-        void SetupUpgradePads(CurrencyManager currency, PlayerLevel playerLevel, UpgradeManager upgrades)
+        void SetupUpgradePads(CurrencyManager currency)
         {
             var pads = FindAll<UpgradePad>();
             if (pads.Length == 0)
@@ -244,61 +327,110 @@ namespace BurgerIdle.Core
                 return;
             }
 
+            // 패널은 하나를 같이 쓰고, 패드가 열 때 자기 지역의 업그레이드를 넘긴다
             var panel = panels[0];
-            panel.Init(upgrades, currency, playerLevel);
+            panel.Init(currency);
             foreach (var pad in pads)
-                pad.Init(player.transform, panel);
+            {
+                var region = RegionOf(pad);
+                pad.Init(player.transform, panel, region.Upgrades, region.Level);
+            }
         }
 
-        void SetupWorkers(UpgradeManager upgrades)
+        void SetupWorkers()
         {
-            var managers = FindAll<WorkerManager>();
-            if (managers.Length == 0)
-                return;
+            foreach (var manager in FindAll<WorkerManager>())
+            {
+                var upgrades = RegionOf(manager).Upgrades;
+                var maxCarry = upgrades.Stat(StatKey.WorkerMaxCarry)
+                    .Select(Mathf.RoundToInt)
+                    .ToReadOnlyReactiveProperty()
+                    .AddTo(this);
+                manager.Init(upgrades.Stat(StatKey.WorkerCount), upgrades.Stat(StatKey.WorkerMoveSpeed), maxCarry, config.pickupInterval);
+            }
+        }
 
-            var maxCarry = upgrades.Stat(StatKey.WorkerMaxCarry)
-                .Select(Mathf.RoundToInt)
-                .ToReadOnlyReactiveProperty()
-                .AddTo(this);
-            managers[0].Init(upgrades.Stat(StatKey.WorkerCount), upgrades.Stat(StatKey.WorkerMoveSpeed), maxCarry, config.pickupInterval);
+        void SetupMiniMaps()
+        {
+            foreach (var miniMap in FindAll<MiniMapView>())
+                miniMap.Init(areas);
         }
 
         /// <summary>
         /// 시작 시(해금 전 시설이 숨겨진 상태) NavMesh를 굽고, 해금으로 시설이 나타날 때마다 다시 굽는다.
-        /// 시설이 솟아오르는 트윈이 끝난 뒤 굽도록 잠시 기다린다.
+        /// 시설이 솟아오르는 트윈이 끝난 뒤 굽도록 잠시 기다린다. 숨겨진 지역은 처음 들어갈 때 굽는다.
         /// </summary>
         void SetupNavMesh()
         {
-            var surfaces = FindAll<NavMeshSurface>();
+            surfaces = FindAll<NavMeshSurface>();
             if (surfaces.Length == 0)
                 return;
 
             // 플레이어는 아직 NavMeshAgent가 없어서 첫 굽기에 캡슐이 장애물로 들어가므로 직접 뺀다
             NavMeshIgnore.Mark(player.gameObject);
 
-            // 이미 데이터가 있으면 그 자리에서 갱신한다 (통째로 다시 만들면 위에 서 있던 플레이어·알바가 NavMesh에서 떨어짐)
-            void Rebuild()
-            {
-                foreach (var surface in surfaces)
-                {
-                    if (surface == null || !surface.isActiveAndEnabled)
-                        continue;
-                    if (surface.navMeshData != null)
-                        surface.UpdateNavMesh(surface.navMeshData);
-                    else
-                        surface.BuildNavMesh();
-                }
-            }
-
-            Rebuild();
+            RebuildNavMesh();
             foreach (var box in FindAll<UnlockBox>())
             {
                 box.IsUnlocked
                     .Where(unlocked => unlocked)
                     .Take(1)
-                    .Subscribe(_ => DOVirtual.DelayedCall(NavMeshRebuildDelay, Rebuild).SetLink(gameObject))
+                    .Subscribe(_ => DOVirtual.DelayedCall(NavMeshRebuildDelay, RebuildNavMesh).SetLink(gameObject))
                     .AddTo(this);
             }
+        }
+
+        /// <summary>
+        /// 켜져 있는 NavMesh를 다시 굽는다.
+        /// 이미 데이터가 있으면 그 자리에서 갱신한다 (통째로 다시 만들면 위에 서 있던 플레이어·알바가 NavMesh에서 떨어짐)
+        /// </summary>
+        void RebuildNavMesh()
+        {
+            foreach (var surface in surfaces)
+            {
+                if (surface == null || !surface.isActiveAndEnabled)
+                    continue;
+                if (surface.navMeshData != null)
+                    surface.UpdateNavMesh(surface.navMeshData);
+                else
+                    surface.BuildNavMesh();
+            }
+        }
+
+        /// <summary>
+        /// 다른 지역으로 옮긴 직후 (도착 지역은 이미 켜져 있음). 들고 있던 물건을 버리고, NavMesh를 준비하고, 시작 위치로 순간이동한다.
+        /// </summary>
+        void OnEnterRegion(RegionState region)
+        {
+            if (player.TryGetComponent<CarryStack>(out var stack))
+                stack.Clear();
+
+            if (surfaces != null)
+            {
+                foreach (var surface in surfaces)
+                {
+                    if (surface == null || !surface.isActiveAndEnabled)
+                        continue;
+
+                    // 지역 안 NavMesh는 한 번 구우면 지역을 다시 켤 때 그대로 올라온다. 처음 들어가는 지역만 굽는다.
+                    // 지역 밖(씬 전체) NavMesh는 새 지역 바닥이 들어가도록 다시 굽는다.
+                    var inRegion = surface.transform.IsChildOf(region.Area.transform);
+                    if (!inRegion || surface.navMeshData == null)
+                        surface.BuildNavMesh();
+                }
+            }
+
+            // 지역이 다시 켜질 때 NavMesh보다 먼저 켜진 알바는 NavMesh 위에 올라가지 못하므로 다시 올린다
+            foreach (var agent in region.Area.GetComponentsInChildren<NavMeshAgent>())
+            {
+                if (agent.isActiveAndEnabled && !agent.isOnNavMesh
+                    && NavMesh.SamplePosition(agent.transform.position, out var hit, AgentSearchRadius, NavMesh.AllAreas))
+                    agent.Warp(hit.position);
+            }
+
+            player.Teleport(region.Area.GetStartPosition());
+            if (mainCamera.TryGetComponent<CameraFollow>(out var follow))
+                follow.Snap();
         }
 
         static T[] FindAll<T>() where T : Object =>

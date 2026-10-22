@@ -44,10 +44,11 @@ namespace BurgerIdle.Pickup
         /// <summary>
         /// 부모를 바꾸고 프리팹 크기로 되돌린다. 위치는 유지한다.
         /// 부모가 해금 연출 등으로 커지는 중일 때 크기가 부모 배율만큼 뻥튀기되는 것을 막는다.
+        /// parent가 null이면 현재 지역(ObjectPools.ActiveParent) 아래에 둔다.
         /// </summary>
         public void AttachTo(Transform parent)
         {
-            transform.SetParent(parent, true);
+            transform.SetParent(parent != null ? parent : ObjectPools.ActiveParent, true);
             transform.localScale = baseScale;
         }
 

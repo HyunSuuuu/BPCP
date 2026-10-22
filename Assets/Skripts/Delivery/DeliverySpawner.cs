@@ -34,6 +34,7 @@ namespace BurgerIdle.Delivery
         [SerializeField] UnlockZone openZone;
 
         CurrencyManager currency;
+        PlayerLevel level;
         GameConfig gameConfig;
         ReadOnlyReactiveProperty<float> incomeMultiplier;
         NotificationPopup notifications;
@@ -41,7 +42,9 @@ namespace BurgerIdle.Delivery
         bool isOpen;
         float timer;
 
-        public void Init(CurrencyManager currency, GameConfig gameConfig, ReadOnlyReactiveProperty<float> incomeMultiplier,
+        /// <param name="level">이 스포너가 속한 지역의 레벨 (배달 성공 경험치를 받음)</param>
+        /// <param name="incomeMultiplier">수익 배율 (플레이어 업그레이드 × 지역 배율)</param>
+        public void Init(CurrencyManager currency, PlayerLevel level, GameConfig gameConfig, ReadOnlyReactiveProperty<float> incomeMultiplier,
             NotificationPopup notifications)
         {
             if (prefab == null || config == null || point == null || area == null)
@@ -59,6 +62,7 @@ namespace BurgerIdle.Delivery
             }
 
             this.currency = currency;
+            this.level = level;
             this.gameConfig = gameConfig;
             this.incomeMultiplier = incomeMultiplier;
             this.notifications = notifications;
@@ -118,7 +122,7 @@ namespace BurgerIdle.Delivery
             var exp = Mathf.RoundToInt(gameConfig.ExpOf(config.orderKind) * quantity * config.rewardMultiplier);
 
             currency.Add(CurrencyType.Money, money);
-            currency.Add(CurrencyType.Exp, exp);
+            level.AddExp(exp);
             GameStats.AddSales(quantity);
             notifications?.Show($"배달 성공!\n+{money:N0}");
         }
