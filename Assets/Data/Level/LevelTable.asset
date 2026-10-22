@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5a09c041121a7a647b5128febe24e800, type: 3}
   m_Name: LevelTable
   m_EditorClassIdentifier: Assembly-CSharp::BurgerIdle.Economy.LevelTable
+  startLevel: 0
   baseExp: 50
   growth: 1.5
-  maxLevel: 10
+  maxLevel: 11

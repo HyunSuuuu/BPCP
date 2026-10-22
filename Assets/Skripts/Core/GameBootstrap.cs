@@ -56,6 +56,8 @@ namespace BurgerIdle.Core
 
         readonly List<RegionState> regions = new List<RegionState>();
         readonly Dictionary<Area, RegionState> regionByArea = new Dictionary<Area, RegionState>();
+        /// <summary>실행 중에 직접 구운 NavMesh. 에디터에서 Bake해 둔 에셋은 지역 프리팹끼리 공유되고 기준 위치가 달라 쓰지 않는다</summary>
+        readonly HashSet<NavMeshSurface> builtSurfaces = new HashSet<NavMeshSurface>();
         NavMeshSurface[] surfaces;
 
         void Awake()
@@ -245,9 +247,12 @@ namespace BurgerIdle.Core
                 if (surfaces == null || surfaces.Length == 0)
                     return null;
 
+                // 루트에서 발끝(렌더러 아래쪽)까지의 높이. NavMesh 높이로 재면, NavMesh가 아직 등록되기 전(지역의
+                // NavMeshSurface.OnEnable보다 이 Awake가 먼저 불릴 때) 0이 되어 캡슐이 바닥에 반쯤 묻힌다
                 var height = 0f;
-                if (NavMesh.SamplePosition(player.transform.position, out var hit, 3f, NavMesh.AllAreas))
-                    height = Mathf.Max(0f, player.transform.position.y - hit.position.y);
+                var body = player.GetComponentInChildren<Renderer>();
+                if (body != null)
+                    height = Mathf.Max(0f, player.transform.position.y - body.bounds.min.y);
 
                 agent = player.gameObject.AddComponent<NavMeshAgent>();
                 agent.radius = playerRadius;
@@ -388,13 +393,23 @@ namespace BurgerIdle.Core
         {
             foreach (var surface in surfaces)
             {
-                if (surface == null || !surface.isActiveAndEnabled)
+                if (!IsLive(surface))
                     continue;
-                if (surface.navMeshData != null)
+                if (builtSurfaces.Contains(surface))
                     surface.UpdateNavMesh(surface.navMeshData);
                 else
-                    surface.BuildNavMesh();
+                    Build(surface);
             }
+        }
+
+        /// <summary>
+        /// 이 지역 위치 기준으로 새 NavMesh 데이터를 굽는다. 에디터에서 Bake한 에셋이 연결돼 있어도 바꿔 끼운다
+        /// (그 에셋은 원본 Area 위치(0,0,0) 기준이라, 다른 위치의 지역에서 UpdateNavMesh하면 범위가 어긋나 NavMesh가 비어 버림).
+        /// </summary>
+        void Build(NavMeshSurface surface)
+        {
+            surface.BuildNavMesh();
+            builtSurfaces.Add(surface);
         }
 
         /// <summary>
@@ -409,14 +424,14 @@ namespace BurgerIdle.Core
             {
                 foreach (var surface in surfaces)
                 {
-                    if (surface == null || !surface.isActiveAndEnabled)
+                    if (!IsLive(surface))
                         continue;
 
                     // 지역 안 NavMesh는 한 번 구우면 지역을 다시 켤 때 그대로 올라온다. 처음 들어가는 지역만 굽는다.
                     // 지역 밖(씬 전체) NavMesh는 새 지역 바닥이 들어가도록 다시 굽는다.
                     var inRegion = surface.transform.IsChildOf(region.Area.transform);
-                    if (!inRegion || surface.navMeshData == null)
-                        surface.BuildNavMesh();
+                    if (!inRegion || !builtSurfaces.Contains(surface))
+                        Build(surface);
                 }
             }
 
@@ -432,6 +447,13 @@ namespace BurgerIdle.Core
             if (mainCamera.TryGetComponent<CameraFollow>(out var follow))
                 follow.Snap();
         }
+
+        /// <summary>
+        /// 켜져 있는 NavMesh인지. isActiveAndEnabled는 OnEnable이 불리기 전이면 false라서(시작 직후 Awake 순서에 따라) 쓰지 않는다.
+        /// OnEnable 전에 구운 데이터는 OnEnable에서 NavMesh에 등록된다.
+        /// </summary>
+        static bool IsLive(NavMeshSurface surface) =>
+            surface != null && surface.enabled && surface.gameObject.activeInHierarchy;
 
         static T[] FindAll<T>() where T : Object =>
             FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
